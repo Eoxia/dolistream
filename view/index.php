@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /* Copyright (C) 2024  Eoxia <technique@eoxia.com>
  * This program is free software under GNU GPL v3+
  *
@@ -629,12 +629,8 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 			// Ajouter les lignes depuis la commande
 			foreach ($order->lines as $line) {
 				if (empty($line->fk_product)) continue;
-				$detail              = new ExpeditionLigne($db);
-				$detail->fk_origin_line = $line->id;
-				$detail->qty            = $line->qty;
-				$detail->qty_asked      = $line->qty;
-				$detail->fk_product     = $line->fk_product;
-				$exp->addline($detail);
+				// addline($entrepot_id, $id_order_line, $qty, $array_options, $fk_product)
+				$exp->addline(0, $line->id, (float) $line->qty, array(), (int) $line->fk_product);
 			}
 
 			if ($exp->valid($fuser) > 0) {
