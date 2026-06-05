@@ -217,10 +217,37 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 
 	// ════════════════════════════════════════════════════════════════════════
 	} elseif ($script === 'generate-product') {
-	// ════════════════════════════════════════════════════════════════════════
-		dsLog($langs->trans('GenerateProducts') . ' : ' . $nb);
-		// Charger le module de numérotation produit configuré
-		// PRODUCT_ADDON (défaut : mod_codeproduct_leopard si non configuré)
+	// ─
+		// Options utilisateur
+		$productType  = GETPOST('product_type',  'alpha') ?: 'random'; // random / product / service
+		$withStock    = (GETPOST('with_stock', 'alpha') === 'yes');
+		$stockQtyMax  = max(1, (int)(GETPOST('stock_qty_max', 'int') ?: 100));
+		$batchMode    = GETPOST('batch_mode', 'alpha') ?: 'none';      // none / lot / serial
+		$hasBatchMod  = isModEnabled('productbatch');
+
+		if ($batchMode !== 'none' && !$hasBatchMod) {
+			dsLog('⚠ Module Lots/Séries non activé → numérotation désactivée', 'warn');
+			$batchMode = 'none';
+		}
+		if ($withStock) {
+			require_once DOL_DOCUMENT_ROOT . '/product/stock/class/mouvementstock.class.php';
+		}
+
+		$whIds = $withStock ? dolinstreamGetWarehouseIds($db) : array();
+		if ($withStock && empty($whIds)) {
+			dsLog('⚠ Aucun entrepôt ouvert — stock ignoré. Créez-en via Pré-requis > Entrepôt.', 'warn');
+			$withStock = false;
+		}
+
+		// Cache noms entrepôts
+		$whNames = array();
+		foreach ($whIds as $wid) {
+			$res = $db->query('SELECT ref FROM ' . MAIN_DB_PREFIX . 'entrepot WHERE rowid=' . (int)$wid);
+			if ($res && ($owh = $db->fetch_object($res))) $whNames[$wid] = $owh->ref;
+		}
+
+		dsLog('Générer des produits : ' . $nb . ' | type=' . $productType . ' | stock=' . ($withStock?'oui':'non') . ' | batch=' . $batchMode);
+
 		$productAddonName = getDolGlobalString('PRODUCT_ADDON', 'mod_codeproduct_leopard');
 		$productAddonFile = DOL_DOCUMENT_ROOT . '/core/modules/product/' . $productAddonName . '.php';
 		$productMod = null;
@@ -231,45 +258,84 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 
 		$ok = $ko = 0;
 		for ($s = 0; $s < $nb; $s++) {
-			$product                    = new Product($db);
-			$product->type              = mt_rand(0, 1); // 0=produit, 1=service
+			$product = new Product($db);
+
+			// Type
+			if ($productType === 'product') {
+				$product->type = 0;
+			} elseif ($productType === 'service') {
+				$product->type = 1;
+			} else {
+				$product->type = mt_rand(0, 1);
+			}
+
 			$product->status            = 1;
-			$product->status_buy        = mt_rand(0, 1);
-			$product->finished          = mt_rand(0, 1);
-			$product->stockable_product = mt_rand(0, 1);
+			$product->status_buy        = 1;
+			$product->finished          = 0;
+			$product->stockable_product = ($product->type === 0) ? 1 : 0;
 			$product->description       = 'Généré automatiquement par DoliStream.';
-			$product->price             = mt_rand(100, 99999) / 100;
+			$product->price             = round(mt_rand(100, 99999) / 100, 2);
 			$product->tva_tx            = '20.000';
 
-			// ── Référence via le module de numérotation Dolibarr configuré ────────
-			// Reproduit ce que l'interface Dolibarr fait dans product/card.php.
-			// getNextValue($obj, $type) : type 0=produit, 1=service
+			// Batch config avant création
+			if ($batchMode === 'lot')    $product->tobatch = 1;
+			if ($batchMode === 'serial') $product->tobatch = 2;
+
+			// Référence
 			if ($productMod !== null) {
 				$productRef = $productMod->getNextValue($product, $product->type);
 			} else {
 				$productRef = '';
 			}
 			if (!$productRef || $productRef === -1) {
-				// Module non configuré (masque vide) → fallback timestamp unique
-				$productRef = ($product->type ? 'SRV' : 'PRD') . '-' . dol_print_date(dol_now(), 'dayhour') . '-' . sprintf('%04d', $s);
-				dsLog('ℹ #' . $s . ' — module ' . $productAddonName . ' non configuré, utilise ref fallback', 'warn');
+				$productRef = ($product->type ? 'SRV' : 'PRD') . '-' . date('YmdHis') . '-' . sprintf('%04d', $s);
+				dsLog('⚠ #' . $s . ' — module ' . $productAddonName . ' non configuré, ref fallback', 'warn');
 			}
 			$product->ref   = $productRef;
-			$product->label = ($product->type ? 'Service ' : 'Produit ') . dol_print_date(dol_now(), 'dayhour') . '-' . sprintf('%04d', $s);
-			// ─────────────────────────────────────────────────────────────────────
+			$product->label = ($product->type ? 'Service ' : 'Produit ') . date('ymd-His') . '-' . sprintf('%04d', $s);
 
 			$ret = $product->create($fuser);
-			if ($ret >= 0) {
-				dsLog('✔ #' . $s . ' — ' . $product->ref . ' (' . $product->price . ' €)', 'success');
-				$ok++;
-			} else {
-				dsLog('✘ #' . $s . ' — ' . $product->error, 'error');
+			if ($ret < 0) {
+				dsLog('✗ #' . $s . ' — ' . $product->error, 'error');
 				$ko++;
+				continue;
 			}
-		}
-		dsLog('─── ' . $ok . ' ' . $langs->trans('ResultSuccess') . ', ' . $ko . ' ' . $langs->trans('ResultErrors') . ' ───');
 
-	// ════════════════════════════════════════════════════════════════════════
+			$typeLabel  = $product->type ? 'Service' : 'Produit';
+			$stockInfo  = '';
+			$batchInfo  = '';
+
+			// Ajout du stock
+			if ($withStock && !empty($whIds)) {
+				$whId   = $whIds[array_rand($whIds)];
+				$whName = $whNames[$whId] ?? ('#' . $whId);
+				$qty    = mt_rand(1, $stockQtyMax);
+
+				if ($batchMode === 'serial') {
+					for ($u = 1; $u <= $qty; $u++) {
+						$serial = 'SN-' . strtoupper(substr(md5(uniqid('', true)), 0, 8));
+						$mv = new MouvementStock($db);
+						$mv->_create($fuser, $product->id, $whId, 1, 0, $product->price, 'DoliStream stock', '', '', 0, 0, $serial);
+					}
+					$batchInfo = 'SN×' . $qty;
+					$stockInfo = '+' . $qty . ' @ ' . $whName;
+				} elseif ($batchMode === 'lot') {
+					$lot = 'LOT-' . date('Ymd') . '-' . sprintf('%04d', $s);
+					$mv = new MouvementStock($db);
+					$mv->_create($fuser, $product->id, $whId, $qty, 0, $product->price, 'DoliStream stock', '', '', 0, 0, $lot);
+					$batchInfo = $lot;
+					$stockInfo = '+' . $qty . ' @ ' . $whName;
+				} else {
+					$mv = new MouvementStock($db);
+					$mv->_create($fuser, $product->id, $whId, $qty, 0, $product->price, 'DoliStream stock');
+					$stockInfo = '+' . $qty . ' @ ' . $whName;
+				}
+			}
+
+			dsLog('✓ #' . $s . ' | ' . $product->ref . ' | ' . $typeLabel . ' | ' . $product->price . ' € | ' . $stockInfo . ' | ' . $batchInfo, 'success');
+			$ok++;
+		}
+		dsLog('═ ' . $ok . ' OK, ' . $ko . ' erreur(s) ═');
 	} elseif ($script === 'generate-invoice') {
 	// ════════════════════════════════════════════════════════════════════════
 		$socids  = dolinstreamGetClientIds($db);
@@ -1128,12 +1194,45 @@ $scriptDefs = array(
 	'generate-product' => array(
 		'label'   => $langs->trans('GenerateProducts'),
 		'icon'    => 'product',
-		'hint'    => $langs->trans('HintProduct'),
+		'hint'    => 'Insère des produits/services avec types, prix et stock aléatoires.',
 		'danger'  => false,
 		'perm'    => 'generate',
-		'columns' => array('Réf.', 'Type', 'Prix HT'),
+		'columns' => array('Réf.', 'Type', 'Prix HT', 'Stock', 'Lot / Série'),
 		'fields'  => array(
-			array('name' => 'nb', 'label' => $langs->trans('NumberToGenerate'), 'type' => 'number', 'default' => 10, 'min' => 1, 'max' => 10000),
+			array('name' => 'nb', 'label' => 'Nombre à générer', 'type' => 'number', 'default' => 10, 'min' => 1, 'max' => 10000),
+			array(
+				'name'    => 'product_type',
+				'label'   => 'Type',
+				'type'    => 'select',
+				'default' => 'random',
+				'options' => array(
+					'random'  => 'Aléatoire',
+					'product' => 'Produit physique',
+					'service' => 'Service',
+				),
+			),
+			array(
+				'name'    => 'with_stock',
+				'label'   => 'Ajouter du stock',
+				'type'    => 'select',
+				'default' => 'no',
+				'options' => array(
+					'no'  => 'Non',
+					'yes' => 'Oui',
+				),
+			),
+			array('name' => 'stock_qty_max', 'label' => 'Qté stock max', 'type' => 'number', 'default' => 100, 'min' => 1, 'max' => 10000),
+			array(
+				'name'    => 'batch_mode',
+				'label'   => 'Numérotation',
+				'type'    => 'select',
+				'default' => 'none',
+				'options' => array(
+					'none'   => 'Sans lot/série',
+					'lot'    => 'Numéros de lot',
+					'serial' => 'Numéros de série',
+				),
+			),
 		),
 	),
 	'generate-invoice' => array(
@@ -1349,56 +1448,14 @@ foreach ($scriptLog as $entry) {
         }
 
     } elseif ($activeScript === 'generate-product') {
-        // ✓ #N - REF (PRICE)
-        if (preg_match('/- (\S+)\s+\(([\d.]+)/', $msg, $m)) {
+        // ✓ #N | REF | TYPE | PRICE € | STOCK | LOT
+        if (preg_match('/\| (\S+) \| (\w+) \| ([\d.]+) € \| (.*?) \| (.*)$/', $msg, $m)) {
+            $cells = array($m[1], $m[2], $m[3] . ' €', trim($m[4]), trim($m[5]));
+        } elseif (preg_match('/- (\S+)\s+\(([\d.]+)/', $msg, $m)) {
+            // Ancien format fallback
             $isService = (strpos($m[1], 'SRV') !== false);
-            $cells = array($m[1], $isService ? 'Service' : 'Produit', $m[2] . ' €');
+            $cells = array($m[1], $isService ? 'Service' : 'Produit', $m[2] . ' €', '', '');
         }
-
-    } elseif (in_array($activeScript, array('generate-invoice', 'generate-order', 'generate-proposal'))) {
-        // ✓ #N | REF | soc=SOCID | DATE | HT=X [| TTC=Y]
-        if (preg_match('/\| (\S+) \| soc=(\d+) \| ([\d\/]+)(?: \| HT=([\d.]+))?(?: \| TTC=([\d.]+))?/', $msg, $m)) {
-            $soc = $resolveSoc((int)$m[2]);
-            if ($activeScript === 'generate-invoice') {
-                $cells = array($m[1], $m[3], $soc, number_format((float)($m[4]??0), 2, ',', ' ') . ' €', number_format((float)($m[5]??0), 2, ',', ' ') . ' €');
-            } else {
-                $cells = array($m[1], $m[3], $soc, number_format((float)($m[4]??0), 2, ',', ' ') . ' €');
-            }
-        }
-
-    } elseif ($activeScript === 'generate-project') {
-        // ✓ #N | REF | TITRE | STATUT | MONTANT € | BUDGET €
-        if (preg_match('/\| (\S+) \| (.+?) \| (.+?) \| ([\d\s]+)\s*€?\s*\| ([\d\s]+)/', $msg, $m)) {
-            $cells = array($m[1], trim($m[2]), trim($m[3]), trim($m[4]) . ' €', trim($m[5]) . ' €');
-        }
-
-    } elseif (in_array($activeScript, array('generate-expedition', 'generate-reception'))) {
-        // ✓ #N | REF | soc=SOCID | DATE
-        if (preg_match('/\| (\S+) \| soc=(\d+) \| (.+)$/', $msg, $m)) {
-            $soc = $resolveSoc((int)$m[2]);
-            $cells = array($m[1], $soc, trim($m[3]));
-        }
-
-    } elseif ($activeScript === 'generate-supplier-order') {
-        // ✓ #N | REF | soc=SOCID | DATE | HT=X
-        if (preg_match('/\| (\S+) \| soc=(\d+) \| ([\d\/]+)(?: \| HT=([\d.]+))?/', $msg, $m)) {
-            $soc = $resolveSoc((int)$m[2]);
-            $cells = array($m[1], $m[3], $soc, number_format((float)($m[4]??0), 2, ',', ' ') . ' €');
-        }
-
-    } elseif ($activeScript === 'generate-supplier-invoice') {
-        // ✓ #N | REF | soc=SOCID | DATE | HT=X | TTC=Y
-        if (preg_match('/\| (\S+) \| soc=(\d+) \| ([\d\/]+)(?: \| HT=([\d.]+))?(?: \| TTC=([\d.]+))?/', $msg, $m)) {
-            $soc = $resolveSoc((int)$m[2]);
-            $cells = array($m[1], $m[3], $soc, number_format((float)($m[4]??0), 2, ',', ' ') . ' €', number_format((float)($m[5]??0), 2, ',', ' ') . ' €');
-        }
-
-    } elseif ($activeScript === 'generate-stock') {
-        // ✓ #N | REF | WH | +QTY [| LOT/SN...]
-        if (preg_match('/\| (\S+) \| (\S+) \| \+(\d+)(?: \| (.+))?$/', $msg, $m)) {
-            $cells = array($m[1], $m[2], '+' . $m[3], $m[4] ?? '');
-        }
-
     } elseif ($activeScript === 'generate-warehouse') {
         // ✓ #N | REF | LABEL | VILLE
         if (preg_match('/\| (\S+) \| (.+?) \| (.+?)$/', $msg, $m)) {
