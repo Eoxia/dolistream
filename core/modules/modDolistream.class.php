@@ -153,7 +153,7 @@ class modDolistream extends DolibarrModules
 			'user'     => 0,
 		);
 
-		// Left menu — Générer (parent)
+		// Left menu — Clients (parent)
 		$this->menu[$r++] = array(
 			'fk_menu'  => 'fk_mainmenu=dolistream',
 			'type'     => 'left',
@@ -170,8 +170,7 @@ class modDolistream extends DolibarrModules
 			'user'     => 0,
 		);
 
-		// Left menu — sous-items Générer (ordre standard Dolibarr)
-		// ── Clients ──────────────────────────────────────────────────────────
+		// Left menu — sous-items Clients
 		$generateItems = array(
 			'generate-product'    => 'Produits',
 			'generate-project'    => 'Projets / Opportunités',
@@ -181,7 +180,6 @@ class modDolistream extends DolibarrModules
 			'generate-invoice'    => 'Factures',
 		);
 		foreach ($generateItems as $scriptKey => $label) {
-			[$label, $icon] = [$label, ''];
 			$this->menu[$r++] = array(
 				'fk_menu'  => 'fk_mainmenu=dolistream,fk_leftmenu=dolistream_generate',
 				'type'     => 'left',
@@ -238,7 +236,41 @@ class modDolistream extends DolibarrModules
 			);
 		}
 
-		// Left menu — Purger
+		// Left menu — Pré-requis (section en gras)
+		$this->menu[$r++] = array(
+			'fk_menu'  => 'fk_mainmenu=dolistream',
+			'type'     => 'left',
+			'titre'    => '<b>Pré-requis</b>',
+			'prefix'   => img_picto('', 'stock', 'class="pictofixedwidth valignmiddle"'),
+			'mainmenu' => 'dolistream',
+			'leftmenu' => 'dolistream_prerequis',
+			'url'      => '/dolistream/view/index.php?script=generate-warehouse',
+			'langs'    => 'dolistream@dolistream',
+			'position' => 1000 + $r,
+			'enabled'  => "isModEnabled('dolistream')",
+			'perms'    => '$user->hasRight("dolistream", "generate", "run")',
+			'target'   => '',
+			'user'     => 0,
+		);
+
+		// Left menu — Entrepôt (sous Pré-requis)
+		$this->menu[$r++] = array(
+			'fk_menu'  => 'fk_mainmenu=dolistream,fk_leftmenu=dolistream_prerequis',
+			'type'     => 'left',
+			'titre'    => 'Entrepôt',
+			'prefix'   => img_picto('', 'stock', 'class="pictofixedwidth valignmiddle"'),
+			'mainmenu' => 'dolistream',
+			'leftmenu' => 'dolistream_generate_warehouse',
+			'url'      => '/dolistream/view/index.php?script=generate-warehouse',
+			'langs'    => 'dolistream@dolistream',
+			'position' => 1000 + $r,
+			'enabled'  => "isModEnabled('dolistream')",
+			'perms'    => '$user->hasRight("dolistream", "generate", "run")',
+			'target'   => '',
+			'user'     => 0,
+		);
+
+		// Left menu — Purger les données
 		$this->menu[$r++] = array(
 			'fk_menu'  => 'fk_mainmenu=dolistream',
 			'type'     => 'left',

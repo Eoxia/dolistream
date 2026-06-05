@@ -589,6 +589,40 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 		dolinstreamProgress($nb, $nb, true); // marque terminé
 		dsLog('─── ' . $ok . ' OK, ' . $ko . ' erreur(s) ───');
 
+	// ─
+	} elseif ($script === 'generate-warehouse') {
+	// ─
+		require_once DOL_DOCUMENT_ROOT . '/product/stock/class/entrepot.class.php';
+
+		$prefix = GETPOST('prefix', 'alpha') ?: 'WH';
+		$prefix = preg_replace('/[^A-Za-z0-9_-]/', '', strtoupper($prefix));
+		if (empty($prefix)) $prefix = 'WH';
+
+		dsLog('Générer des entrepôts : ' . $nb . ' (préfixe=' . $prefix . ')');
+		$ok = $ko = 0;
+
+		for ($s = 1; $s <= $nb; $s++) {
+			$wh              = new Entrepot($db);
+			$wh->ref         = $prefix . '-' . sprintf('%03d', $s);
+			$wh->label       = 'Entrepôt ' . $prefix . '-' . sprintf('%03d', $s);
+			$wh->description = 'Généré automatiquement par DoliStream';
+			$wh->lieu        = 'DoliStream';
+			$wh->address     = $s . ' rue de la Génération';
+			$wh->zip         = '75' . sprintf('%03d', $s);
+			$wh->town        = 'Paris';
+			$wh->country_id  = 1;
+			$wh->statut      = 1;
+
+			$whid = $wh->create($fuser);
+			if ($whid > 0) {
+				dsLog('✓ #' . $s . ' | ' . $wh->ref . ' | ' . $wh->label . ' | ' . $wh->town, 'success');
+				$ok++;
+			} else {
+				dsLog('✗ #' . $s . ' - ' . $wh->error, 'error');
+				$ko++;
+			}
+		}
+		dsLog('═ ' . $ok . ' OK, ' . $ko . ' erreur(s) ═');
 	// ════════════════════════════════════════════════════════════════════════
 	} elseif ($script === 'generate-expedition') {
 	// ════════════════════════════════════════════════════════════════════════
@@ -1055,6 +1089,24 @@ $scriptDefs = array(
 			),
 		),
 	),
+	'generate-warehouse' => array(
+		'label'   => 'Générer des Entrepôts',
+		'icon'    => 'stock',
+		'hint'    => 'Crée des entrepôts numérotés séquentiellement. Utile comme pré-requis avant de générer des expéditions avec gestion de stock.',
+		'danger'  => false,
+		'perm'    => 'generate',
+		'columns' => array('Réf.', 'Libellé', 'Ville'),
+		'fields'  => array(
+			array('name' => 'nb', 'label' => 'Nombre à générer', 'type' => 'number', 'default' => 3, 'min' => 1, 'max' => 50),
+			array(
+				'name'        => 'prefix',
+				'label'       => 'Préfixe de référence',
+				'type'        => 'text',
+				'default'     => 'WH',
+				'placeholder' => 'ex: WH, ENT, DEPOT',
+			),
+		),
+	),
 	'purge-data' => array(
 		'label'   => $langs->trans('PurgeData'),
 		'icon'    => 'delete',
@@ -1204,6 +1256,12 @@ foreach ($scriptLog as $entry) {
         if (preg_match('/\| (\S+) \| soc=(\d+) \| ([\d\/]+)(?: \| HT=([\d.]+))?(?: \| TTC=([\d.]+))?/', $msg, $m)) {
             $soc = $resolveSoc((int)$m[2]);
             $cells = array($m[1], $m[3], $soc, number_format((float)($m[4]??0), 2, ',', ' ') . ' €', number_format((float)($m[5]??0), 2, ',', ' ') . ' €');
+        }
+
+    } elseif ($activeScript === 'generate-warehouse') {
+        // ✓ #N | REF | LABEL | VILLE
+        if (preg_match('/\| (\S+) \| (.+?) \| (.+?)$/', $msg, $m)) {
+            $cells = array($m[1], trim($m[2]), trim($m[3]));
         }
 
     } elseif ($activeScript === 'purge-data') {
