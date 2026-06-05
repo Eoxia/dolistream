@@ -623,6 +623,107 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 			}
 		}
 		dsLog('═ ' . $ok . ' OK, ' . $ko . ' erreur(s) ═');
+
+	// ─
+	} elseif ($script === 'generate-stock') {
+	// ─
+		require_once DOL_DOCUMENT_ROOT . '/product/stock/class/mouvementstock.class.php';
+
+		$batchMode   = GETPOST('batch_mode',   'alpha') ?: 'none';
+		$productType = GETPOST('product_type', 'alpha') ?: 'all';
+		$qtyMax      = max(1, (int) GETPOST('qty_max', 'int') ?: 50);
+
+		$hasBatchModule = isModEnabled('productbatch');
+
+		$prodIds = dolinstreamGetStockableProductIds($db, $productType);
+		$whIds   = dolinstreamGetWarehouseIds($db);
+
+		if (empty($prodIds)) { dsLog('✗ Aucun produit trouvé. Générez des produits d\'abord.', 'error'); goto render; }
+		if (empty($whIds))   { dsLog('✗ Aucun entrepôt ouvert. Créez-en via Pré-requis > Entrepôt.', 'error'); goto render; }
+
+		// Cache noms entrepôts
+		$whNames = array();
+		foreach ($whIds as $wid) {
+			$resql = $db->query('SELECT ref FROM ' . MAIN_DB_PREFIX . 'entrepot WHERE rowid=' . (int)$wid);
+			if ($resql && ($owh = $db->fetch_object($resql))) $whNames[$wid] = $owh->ref;
+		}
+
+		if ($batchMode !== 'none' && !$hasBatchModule) {
+			dsLog('⚠ Module Lots/Séries non activé → mode "sans lot/série" utilisé', 'warn');
+			$batchMode = 'none';
+		}
+
+		dsLog('Générer du stock : ' . $nb . ' mouvements | type=' . $productType . ' | mode=' . $batchMode . ' | qtyMax=' . $qtyMax);
+		$ok = $ko = 0;
+
+		for ($s = 1; $s <= $nb; $s++) {
+			$productId = $prodIds[array_rand($prodIds)];
+			$whId      = $whIds[array_rand($whIds)];
+			$whName    = $whNames[$whId] ?? ('#' . $whId);
+			$qty       = mt_rand(1, $qtyMax);
+
+			$product = new Product($db);
+			$product->fetch($productId);
+
+			$batchStr = '';
+
+			if ($batchMode === 'lot') {
+				// Force tobatch = 1 si besoin
+				if ((int)$product->tobatch < 1) {
+					$db->query('UPDATE ' . MAIN_DB_PREFIX . 'product SET tobatch=1 WHERE rowid=' . (int)$productId);
+					$product->tobatch = 1;
+				}
+				$batchStr = 'LOT-' . date('Ymd') . '-' . sprintf('%04d', $s);
+				$mouvement = new MouvementStock($db);
+				$res = $mouvement->_create($fuser, $productId, $whId, $qty, 0, $product->price, 'DoliStream stock', '', '', 0, 0, $batchStr);
+				if ($res > 0) {
+					dsLog('✓ #' . $s . ' | ' . $product->ref . ' | ' . $whName . ' | +' . $qty . ' | ' . $batchStr, 'success');
+					$ok++;
+				} else {
+					dsLog('✗ #' . $s . ' [' . $product->ref . '] ' . $mouvement->error, 'error');
+					$ko++;
+				}
+
+			} elseif ($batchMode === 'serial') {
+				// Force tobatch = 2 si besoin
+				if ((int)$product->tobatch < 2) {
+					$db->query('UPDATE ' . MAIN_DB_PREFIX . 'product SET tobatch=2 WHERE rowid=' . (int)$productId);
+					$product->tobatch = 2;
+				}
+				// Une unité par mouvement avec numéro de série unique
+				$serials = array();
+				$ok_unit = 0;
+				for ($u = 1; $u <= $qty; $u++) {
+					$serial = 'SN-' . strtoupper(substr(md5(uniqid('', true)), 0, 8));
+					$serials[] = $serial;
+					$mouvement = new MouvementStock($db);
+					$res = $mouvement->_create($fuser, $productId, $whId, 1, 0, $product->price, 'DoliStream stock', '', '', 0, 0, $serial);
+					if ($res > 0) $ok_unit++;
+				}
+				$batchStr = implode(', ', array_slice($serials, 0, 3)) . ($qty > 3 ? '…' : '');
+				if ($ok_unit > 0) {
+					dsLog('✓ #' . $s . ' | ' . $product->ref . ' | ' . $whName . ' | +' . $qty . ' unités | ' . $batchStr, 'success');
+					$ok++;
+				} else {
+					dsLog('✗ #' . $s . ' [' . $product->ref . '] série impossible', 'error');
+					$ko++;
+				}
+
+			} else {
+				// Sans lot ni série
+				$mouvement = new MouvementStock($db);
+				$res = $mouvement->_create($fuser, $productId, $whId, $qty, 0, $product->price, 'DoliStream stock');
+				if ($res > 0) {
+					dsLog('✓ #' . $s . ' | ' . $product->ref . ' | ' . $whName . ' | +' . $qty, 'success');
+					$ok++;
+				} else {
+					dsLog('✗ #' . $s . ' [' . $product->ref . '] ' . $mouvement->error, 'error');
+					$ko++;
+				}
+			}
+		}
+		dsLog('═ ' . $ok . ' OK, ' . $ko . ' erreur(s) ═');
+
 	// ════════════════════════════════════════════════════════════════════════
 	} elseif ($script === 'generate-expedition') {
 	// ════════════════════════════════════════════════════════════════════════
@@ -1089,6 +1190,40 @@ $scriptDefs = array(
 			),
 		),
 	),
+	'generate-stock' => array(
+		'label'   => 'Générer du Stock',
+		'icon'    => 'stock',
+		'hint'    => 'Ajoute du stock aléatoire sur les produits existants dans les entrepôts existants. Prérequis : avoir des produits et au moins un entrepôt.',
+		'danger'  => false,
+		'perm'    => 'generate',
+		'columns' => array('Produit', 'Entrepôt', 'Quantité', 'Lot / Série'),
+		'fields'  => array(
+			array('name' => 'nb',      'label' => 'Nb mouvements', 'type' => 'number', 'default' => 20,  'min' => 1, 'max' => 500),
+			array('name' => 'qty_max', 'label' => 'Qté max / mouv.', 'type' => 'number', 'default' => 50, 'min' => 1, 'max' => 1000),
+			array(
+				'name'    => 'product_type',
+				'label'   => 'Type produit',
+				'type'    => 'select',
+				'default' => 'all',
+				'options' => array(
+					'all'     => 'Tous',
+					'product' => 'Produits seulement',
+					'service' => 'Services seulement',
+				),
+			),
+			array(
+				'name'    => 'batch_mode',
+				'label'   => 'Numérotation',
+				'type'    => 'select',
+				'default' => 'none',
+				'options' => array(
+					'none'   => 'Sans lot/série',
+					'lot'    => 'Numéros de lot',
+					'serial' => 'Numéros de série (1u/série)',
+				),
+			),
+		),
+	),
 	'generate-warehouse' => array(
 		'label'   => 'Générer des Entrepôts',
 		'icon'    => 'stock',
@@ -1256,6 +1391,12 @@ foreach ($scriptLog as $entry) {
         if (preg_match('/\| (\S+) \| soc=(\d+) \| ([\d\/]+)(?: \| HT=([\d.]+))?(?: \| TTC=([\d.]+))?/', $msg, $m)) {
             $soc = $resolveSoc((int)$m[2]);
             $cells = array($m[1], $m[3], $soc, number_format((float)($m[4]??0), 2, ',', ' ') . ' €', number_format((float)($m[5]??0), 2, ',', ' ') . ' €');
+        }
+
+    } elseif ($activeScript === 'generate-stock') {
+        // ✓ #N | REF | WH | +QTY [| LOT/SN...]
+        if (preg_match('/\| (\S+) \| (\S+) \| \+(\d+)(?: \| (.+))?$/', $msg, $m)) {
+            $cells = array($m[1], $m[2], '+' . $m[3], $m[4] ?? '');
         }
 
     } elseif ($activeScript === 'generate-warehouse') {

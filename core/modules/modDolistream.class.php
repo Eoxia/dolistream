@@ -270,6 +270,23 @@ class modDolistream extends DolibarrModules
 			'user'     => 0,
 		);
 
+
+		// Left menu — Stock (sous Pré-requis)
+		$this->menu[$r++] = array(
+			'fk_menu'  => 'fk_mainmenu=dolistream,fk_leftmenu=dolistream_prerequis',
+			'type'     => 'left',
+			'titre'    => 'Stock',
+			'prefix'   => img_picto('', 'stock', 'class="pictofixedwidth valignmiddle"'),
+			'mainmenu' => 'dolistream',
+			'leftmenu' => 'dolistream_generate_stock',
+			'url'      => '/dolistream/view/index.php?script=generate-stock',
+			'langs'    => 'dolistream@dolistream',
+			'position' => 1000 + $r,
+			'enabled'  => "isModEnabled('dolistream')",
+			'perms'    => '$user->hasRight("dolistream", "generate", "run")',
+			'target'   => '',
+			'user'     => 0,
+		);
 		// Left menu — Purger les données
 		$this->menu[$r++] = array(
 			'fk_menu'  => 'fk_mainmenu=dolistream',

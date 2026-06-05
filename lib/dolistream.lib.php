@@ -181,3 +181,60 @@ function dolinstreamGetBuyProductIds(DoliDB $db): array
 	}
 	return $ids;
 }
+
+/**
+ * Fetch rowids of open warehouses (statut=1)
+ *
+ * @param  DoliDB $db
+ * @return int[]
+ */
+function dolinstreamGetWarehouseIds(DoliDB $db): array
+{
+	$ids   = array();
+	$resql = $db->query('SELECT rowid FROM ' . MAIN_DB_PREFIX . 'entrepot WHERE statut = 1 ORDER BY rowid LIMIT 200');
+	if ($resql) {
+		while ($row = $db->fetch_row($resql)) {
+			$ids[] = (int) $row[0];
+		}
+		$db->free($resql);
+	}
+	return $ids;
+}
+
+/**
+ * Fetch rowids of stockable products, optionally filtered by type
+ *
+ * @param  DoliDB $db
+ * @param  string $type 'all' | 'product' (type=0) | 'service' (type=1)
+ * @return int[]
+ */
+function dolinstreamGetStockableProductIds(DoliDB $db, string $type = 'all'): array
+{
+	$sql = 'SELECT rowid FROM ' . MAIN_DB_PREFIX . 'product WHERE tosell = 1';
+	if ($type === 'product') {
+		$sql .= ' AND fk_product_type = 0';
+	} elseif ($type === 'service') {
+		$sql .= ' AND fk_product_type = 1';
+	}
+	$sql .= ' ORDER BY rowid LIMIT 500';
+
+	$ids   = array();
+	$resql = $db->query($sql);
+	if ($resql) {
+		while ($row = $db->fetch_row($resql)) {
+			$ids[] = (int) $row[0];
+		}
+		$db->free($resql);
+	}
+	// Fallback : tous les produits si aucun actif
+	if (empty($ids)) {
+		$resql = $db->query('SELECT rowid FROM ' . MAIN_DB_PREFIX . 'product LIMIT 200');
+		if ($resql) {
+			while ($row = $db->fetch_row($resql)) {
+				$ids[] = (int) $row[0];
+			}
+			$db->free($resql);
+		}
+	}
+	return $ids;
+}
