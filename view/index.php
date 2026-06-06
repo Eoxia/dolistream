@@ -46,6 +46,7 @@ if (file_exists(DOL_DOCUMENT_ROOT . '/reception/class/reception.class.php')) {
 	require_once DOL_DOCUMENT_ROOT . '/reception/class/reception.class.php';
 }
 require_once '../lib/dolistream.lib.php';
+require_once DOL_DOCUMENT_ROOT . '/comm/action/class/actioncomm.class.php';
 
 
 // ── Sécurité ─────────────────────────────────────────────────────────────────
@@ -103,6 +104,84 @@ function dsLog(string $msg, string $level = 'info'): void
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+
+// ── Config DB résultats par script (tableau DB + console log + ActionComm) ───
+$dsDbConf = array(
+	'generate-thirdparty' => array(
+		'table'  => 'societe',
+		'head'   => array('Nom / Raison sociale', 'Type', 'Code client', 'Code fourn.'),
+		'select' => "SELECT s.rowid, s.nom, IF(s.client IN(1,2),'Client',IF(s.fournisseur=1,'Fournisseur','Autre')) AS type, IFNULL(s.code_client,'—') AS cc, IFNULL(s.code_fournisseur,'—') AS cf FROM " . MAIN_DB_PREFIX . "societe s WHERE s.rowid > {MAX} ORDER BY s.rowid ASC LIMIT {NB}",
+		'url'    => '/societe/card.php?socid=',
+	),
+	'generate-product' => array(
+		'table'  => 'product',
+		'head'   => array('Libellé', 'Prix HT', 'Type'),
+		'select' => "SELECT p.rowid, p.ref, p.label, CONCAT(ROUND(p.price,2),' €') AS prix, IF(p.fk_product_type=0,'Produit','Service') AS type FROM " . MAIN_DB_PREFIX . "product p WHERE p.rowid > {MAX} ORDER BY p.rowid ASC LIMIT {NB}",
+		'url'    => '/product/card.php?id=',
+	),
+	'generate-invoice' => array(
+		'table'  => 'facture',
+		'head'   => array('Tiers', 'Date', 'Montant HT', 'Montant TTC'),
+		'select' => "SELECT f.rowid, f.ref, s.nom AS tiers, DATE_FORMAT(f.datef,'%d/%m/%Y') AS date, CONCAT(ROUND(f.total_ht,2),' €') AS ht, CONCAT(ROUND(f.total_ttc,2),' €') AS ttc FROM " . MAIN_DB_PREFIX . "facture f LEFT JOIN " . MAIN_DB_PREFIX . "societe s ON s.rowid=f.fk_soc WHERE f.rowid > {MAX} ORDER BY f.rowid ASC LIMIT {NB}",
+		'url'    => '/compta/facture/card.php?id=',
+	),
+	'generate-order' => array(
+		'table'  => 'commande',
+		'head'   => array('Tiers', 'Date', 'Montant HT'),
+		'select' => "SELECT c.rowid, c.ref, s.nom AS tiers, DATE_FORMAT(c.date_commande,'%d/%m/%Y') AS date, CONCAT(ROUND(c.total_ht,2),' €') AS ht FROM " . MAIN_DB_PREFIX . "commande c LEFT JOIN " . MAIN_DB_PREFIX . "societe s ON s.rowid=c.fk_soc WHERE c.rowid > {MAX} ORDER BY c.rowid ASC LIMIT {NB}",
+		'url'    => '/commande/card.php?id=',
+	),
+	'generate-proposal' => array(
+		'table'  => 'propal',
+		'head'   => array('Tiers', 'Date', 'Montant HT'),
+		'select' => "SELECT p.rowid, p.ref, s.nom AS tiers, DATE_FORMAT(p.date,'%d/%m/%Y') AS date, CONCAT(ROUND(p.total_ht,2),' €') AS ht FROM " . MAIN_DB_PREFIX . "propal p LEFT JOIN " . MAIN_DB_PREFIX . "societe s ON s.rowid=p.fk_soc WHERE p.rowid > {MAX} ORDER BY p.rowid ASC LIMIT {NB}",
+		'url'    => '/comm/propal/card.php?id=',
+	),
+	'generate-project' => array(
+		'table'  => 'projet',
+		'head'   => array('Titre', 'Montant opp.', 'Budget'),
+		'select' => "SELECT p.rowid, p.ref, p.title, CONCAT(FORMAT(IFNULL(p.opp_amount,0),0),' €') AS opp, CONCAT(FORMAT(IFNULL(p.budget_amount,0),0),' €') AS budget FROM " . MAIN_DB_PREFIX . "projet p WHERE p.rowid > {MAX} ORDER BY p.rowid ASC LIMIT {NB}",
+		'url'    => '/projet/card.php?id=',
+	),
+	'generate-expedition' => array(
+		'table'  => 'expedition',
+		'head'   => array('Tiers', 'Date livraison'),
+		'select' => "SELECT e.rowid, e.ref, s.nom AS tiers, IFNULL(DATE_FORMAT(e.date_delivery,'%d/%m/%Y'),'—') AS date_liv FROM " . MAIN_DB_PREFIX . "expedition e LEFT JOIN " . MAIN_DB_PREFIX . "societe s ON s.rowid=e.fk_soc WHERE e.rowid > {MAX} ORDER BY e.rowid ASC LIMIT {NB}",
+		'url'    => '/expedition/card.php?id=',
+	),
+	'generate-supplier-order' => array(
+		'table'  => 'commande_fournisseur',
+		'head'   => array('Fournisseur', 'Date', 'Montant HT'),
+		'select' => "SELECT c.rowid, c.ref, s.nom AS fourn, DATE_FORMAT(c.date_commande,'%d/%m/%Y') AS date, CONCAT(ROUND(c.total_ht,2),' €') AS ht FROM " . MAIN_DB_PREFIX . "commande_fournisseur c LEFT JOIN " . MAIN_DB_PREFIX . "societe s ON s.rowid=c.fk_soc WHERE c.rowid > {MAX} ORDER BY c.rowid ASC LIMIT {NB}",
+		'url'    => '/fourn/commande/card.php?id=',
+	),
+	'generate-reception' => array(
+		'table'  => 'reception',
+		'head'   => array('Fournisseur', 'Date réception'),
+		'select' => "SELECT r.rowid, r.ref, s.nom AS fourn, IFNULL(DATE_FORMAT(r.date_reception,'%d/%m/%Y'),'—') AS date_rec FROM " . MAIN_DB_PREFIX . "reception r LEFT JOIN " . MAIN_DB_PREFIX . "societe s ON s.rowid=r.fk_soc WHERE r.rowid > {MAX} ORDER BY r.rowid ASC LIMIT {NB}",
+		'url'    => '/reception/card.php?id=',
+	),
+	'generate-supplier-invoice' => array(
+		'table'  => 'facture_fourn',
+		'head'   => array('Fournisseur', 'Date', 'Montant HT', 'Montant TTC'),
+		'select' => "SELECT f.rowid, f.ref, s.nom AS fourn, DATE_FORMAT(f.datef,'%d/%m/%Y') AS date, CONCAT(ROUND(f.total_ht,2),' €') AS ht, CONCAT(ROUND(f.total_ttc,2),' €') AS ttc FROM " . MAIN_DB_PREFIX . "facture_fourn f LEFT JOIN " . MAIN_DB_PREFIX . "societe s ON s.rowid=f.fk_soc WHERE f.rowid > {MAX} ORDER BY f.rowid ASC LIMIT {NB}",
+		'url'    => '/fourn/facture/card.php?id=',
+	),
+	'generate-warehouse' => array(
+		'table'  => 'entrepot',
+		'head'   => array('Libellé', 'Lieu', 'Ville'),
+		'select' => "SELECT e.rowid, e.ref, e.label, IFNULL(e.lieu,'—') AS lieu, IFNULL(e.town,'—') AS town FROM " . MAIN_DB_PREFIX . "entrepot e WHERE e.rowid > {MAX} ORDER BY e.rowid ASC LIMIT {NB}",
+		'url'    => '/product/stock/card.php?id=',
+	),
+	'generate-stock' => array(
+		'table'  => 'stock_mouvement',
+		'head'   => array('Produit', 'Entrepôt', 'Quantité', 'Lot / Série'),
+		'select' => "SELECT m.rowid, p.ref AS produit, e.ref AS entrepot, m.qty AS qte, IFNULL(m.batch,'') AS batch FROM " . MAIN_DB_PREFIX . "stock_mouvement m LEFT JOIN " . MAIN_DB_PREFIX . "product p ON p.rowid=m.fk_product LEFT JOIN " . MAIN_DB_PREFIX . "entrepot e ON e.rowid=m.fk_entrepot WHERE m.rowid > {MAX} AND m.type_mouvement = 0 ORDER BY m.rowid ASC LIMIT {NB}",
+		'url'    => '/product/card.php?id=',
+	),
+);
+$preExecMaxRowid = 0;
+
 // ACTIONS — logique inline, pas de subprocess
 // ═══════════════════════════════════════════════════════════════════════════════
 if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
@@ -112,6 +191,15 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 	}
 
 	@set_time_limit(300);
+
+	// Capture rowid max AVANT creation (pour recuperer les elements crees)
+	if (isset($dsDbConf[$script])) {
+		$_preSql = 'SELECT MAX(rowid) AS m FROM ' . MAIN_DB_PREFIX . $dsDbConf[$script]['table'];
+		$_preRes = $db->query($_preSql);
+		if ($_preRes && ($_preRow = $db->fetch_object($_preRes))) {
+			$preExecMaxRowid = (int)$_preRow->m;
+		}
+	}
 
 	// Initialise le fichier de progression
 	dolinstreamProgress(0, 0);
@@ -1145,6 +1233,68 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // RENDER
 // ═══════════════════════════════════════════════════════════════════════════════
+
+// Post-execution: DB results + console text + ActionComm
+$dbResults   = array();
+$dbHead      = array();
+$dbUrl       = '';
+$consoleText = '';
+$acId        = 0;
+$acLabel     = '';
+
+if ($action === 'run' && isset($dsDbConf[$script])) {
+	$_conf  = $dsDbConf[$script];
+	$dbHead = $_conf['head'];
+	$dbUrl  = $_conf['url'];
+	$_sql   = str_replace(array('{MAX}', '{NB}'), array((int)$preExecMaxRowid, (int)($nb ?: 500)), $_conf['select']);
+	$_res   = $db->query($_sql);
+	while ($_res && ($_row = $db->fetch_assoc($_res))) {
+		$dbResults[] = $_row;
+	}
+	// Label ActionComm
+	$_scriptParams = 'nb=' . $nb;
+	foreach (array('product_type','with_stock','batch_mode','prefix','qty_max','stock_qty_max') as $_p) {
+		$_v = GETPOST($_p, 'alpha');
+		if ($_v !== '') $_scriptParams .= ' | ' . $_p . '=' . $_v;
+	}
+	$acLabel = 'DoliStream › ' . $script . ' | ' . $_scriptParams;
+
+	// Console text: en-tete + lignes DB
+	$_heads  = array_merge(array('Ref.'), $dbHead);
+	$_widths = array_map('strlen', $_heads);
+	foreach ($dbResults as $_dr) {
+		foreach (array_values($_dr) as $_di => $_dv) {
+			$_w = mb_strlen((string)$_dv);
+			if (!isset($_widths[$_di]) || $_w > $_widths[$_di]) $_widths[$_di] = $_w;
+		}
+	}
+	$_sep = str_repeat('═', array_sum($_widths) + count($_widths)*3 + 1);
+	$_hln = implode(' | ', array_map(fn($h,$w) => str_pad($h,$w), $_heads, $_widths));
+	$consoleText  = 'Script     : ' . $script . "\n";
+	$consoleText .= 'Parametres : ' . $_scriptParams . "\n";
+	$consoleText .= 'Date       : ' . dol_print_date(dol_now(), 'dayhour') . "\n";
+	$consoleText .= $_sep . "\n" . $_hln . "\n" . str_repeat('─', mb_strlen($_sep)) . "\n";
+	foreach ($dbResults as $_dr) {
+		$_dv = array_values($_dr);
+		$consoleText .= implode(' | ', array_map(fn($v,$w) => str_pad((string)$v,$w), $_dv, $_widths)) . "\n";
+	}
+	$consoleText .= $_sep . "\n" . count($dbResults) . ' element(s) cree(s)' . "\n";
+
+	// ActionComm
+	if (!empty($dbResults)) {
+		$_noteHtml  = '<pre style="font-family:monospace;font-size:12px;background:#1e1e1e;color:#d4d4d4;padding:12px;border-radius:4px;">';
+		$_noteHtml .= htmlspecialchars($consoleText) . '</pre>';
+		$_ac = new ActionComm($db);
+		$_ac->type_code      = 'AC_OTH_AUTO';
+		$_ac->label          = $acLabel;
+		$_ac->note_private   = $_noteHtml;
+		$_ac->datep          = dol_now();
+		$_ac->fk_user_action = $fuser->id;
+		$_ac->percentage     = 100;
+		$acId = (int)$_ac->create($fuser);
+	}
+}
+
 render:
 
 // ── Stats base de données ────────────────────────────────────────────────────
@@ -1781,64 +1931,105 @@ print dol_get_fiche_head($head, 'index', 'DoliStream', -1, 'technic');
 </form>
 
 
-<?php if (!empty($scriptLog)):
-	$okCount  = count(array_filter($scriptLog, static fn($l) => $l['level'] === 'success'));
-	$errCount = count(array_filter($scriptLog, static fn($l) => $l['level'] === 'error'));
-	$cols     = $def['columns'] ?? array();
+<?php if ($action === 'run'): ?>
+
+<?php
+// ── Tableau DB (style Dolibarr list) ─────────────────────────────────────────
+$_okCount   = count(array_filter($scriptLog, fn($l) => $l['level'] === 'success'));
+$_errCount  = count(array_filter($scriptLog, fn($l) => $l['level'] === 'error'));
+$_warnCount = count(array_filter($scriptLog, fn($l) => $l['level'] === 'warn'));
 ?>
 
-<!-- Résultats en liste Dolibarr -->
+<?php if (!empty($dbResults)): ?>
 <?php
-$resLimit   = 25;
-$resOffset  = $page * $resLimit;
-$pagedLog   = array_slice($structLog, $resOffset, $resLimit);
-$totalRows  = count($structLog);
-$pageParam  = 'script=' . urlencode($activeScript);
-
-
 print_barre_liste(
-	$langs->trans('ExecutionResult'),
-	$page, $_SERVER['PHP_SELF'], $pageParam,
+	'Éléments créés',
+	$page, $_SERVER['PHP_SELF'], 'script=' . urlencode($activeScript),
 	'', '',
-	'<span class="badge badge-status4 badge-status">' . $okCount . ' OK</span>'
-	. ($errCount > 0 ? '&nbsp;<span class="badge badge-status8 badge-status">' . $errCount . ' Erreur(s)</span>' : ''),
-	count($pagedLog), $totalRows, '', 0, '', '', $resLimit
+	'<span class="badge badge-status4 badge-status">' . $_okCount . ' OK</span>'
+	. ($_errCount  > 0 ? '&nbsp;<span class="badge badge-status8 badge-status">' . $_errCount . ' Erreur(s)</span>' : '')
+	. ($_warnCount > 0 ? '&nbsp;<span class="badge badge-status1 badge-status">' . $_warnCount . ' Avert.</span>' : ''),
+	count($dbResults), count($dbResults), '', 0, '', '', 25
 );
 ?>
-
 <table class="noborder centpercent">
 <thead>
 <tr class="liste_titre">
-	<th style="width:30px;"></th>
-	<?php foreach ($cols as $col): ?><th><?php print $col; ?></th><?php endforeach; ?>
+  <th>Réf.</th>
+  <?php foreach ($dbHead as $_dh): ?><th><?php print htmlspecialchars($_dh); ?></th><?php endforeach; ?>
 </tr>
 </thead>
 <tbody>
-<?php
-$nbCols = count($cols);
-foreach ($pagedLog as $row):
-	$badge = match($row['level']) {
-		'success' => '<span class="badge badge-status4 badge-status">✔</span>',
-		'error'   => '<span class="badge badge-status8 badge-status">✘</span>',
-		'warn'    => '<span class="badge badge-status1 badge-status">!</span>',
-		default   => '<span class="badge badge-status0 badge-status">ℹ</span>',
-	};
-	$nCells = count($row['cells']);
+<?php foreach ($dbResults as $_dbRow):
+	$_dvals  = array_values($_dbRow);
+	$_drowid = (int)$_dvals[0];
+	$_dref   = htmlspecialchars((string)$_dvals[1]);
+	$_dlink  = $dbUrl ? '<a href="' . DOL_URL_ROOT . $dbUrl . $_drowid . '">' . $_dref . '</a>' : $_dref;
 ?>
 <tr class="oddeven">
-	<td><?php print $badge; ?></td>
-	<?php if ($nCells === 1): ?>
-		<td colspan="<?php print max(1, $nbCols); ?>"><?php $c0=$row['cells'][0]; print (is_array($c0)&&$c0[0]==='html')?$c0[1]:htmlspecialchars((string)$c0); ?></td>
-	<?php else: ?>
-		<?php foreach ($row['cells'] as $cell): ?><td><?php print (is_array($cell)&&$cell[0]==='html')?$cell[1]:htmlspecialchars((string)$cell); ?></td><?php endforeach; ?>
-		<?php for ($i = $nCells; $i < $nbCols; $i++): ?><td></td><?php endfor; ?>
-	<?php endif; ?>
+  <td><?php print $_dlink; ?></td>
+  <?php for ($_di = 2; $_di < count($_dvals); $_di++): ?>
+    <td><?php print htmlspecialchars((string)$_dvals[$_di]); ?></td>
+  <?php endfor; ?>
 </tr>
 <?php endforeach; ?>
 </tbody>
 </table>
 
+<?php if ($acId > 0): ?>
+<div style="margin:8px 0 4px;font-size:0.85em;color:#555;">
+	📌 <a href="<?php print DOL_URL_ROOT; ?>/comm/action/card.php?id=<?php print $acId; ?>">Voir l'ActionComm enregistrée</a>
+	<span style="color:#999;margin-left:8px;"><?php print htmlspecialchars($acLabel); ?></span>
+</div>
 <?php endif; ?>
+
+<?php else: ?>
+<div class="info">Aucun élément retourné par la base (vérifiez les logs ci-dessous).</div>
+<?php endif; ?>
+
+<?php if (!empty($consoleText) || !empty($scriptLog)): ?>
+<div style="margin-top:18px;">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+    <span style="font-weight:600;font-size:0.88em;color:#444;">📋 Console log</span>
+    <button type="button" id="ds-copy-btn" onclick="dsConsoleCopy()" style="font-size:0.8em;padding:3px 12px;cursor:pointer;border:1px solid #aaa;border-radius:3px;background:#f7f7f7;">
+      📋 Copier
+    </button>
+  </div>
+  <pre id="ds-console-output" style="background:#1e1e1e;color:#d4d4d4;font-family:'Consolas','Courier New',monospace;font-size:0.78em;line-height:1.5;padding:14px 16px;border-radius:6px;overflow:auto;max-height:420px;margin:0;border:1px solid #333;"><?php
+// 1) Résumé DB tabulé
+if (!empty($consoleText)) print htmlspecialchars($consoleText) . "\n";
+// 2) Log d'exécution complet (warnings + erreurs + succès)
+foreach ($scriptLog as $_le) {
+	$_icon = $_le['level'] === 'success' ? '✓' : ($_le['level'] === 'error' ? '✗' : '⚠');
+	print htmlspecialchars($_icon . ' ' . $_le['msg']) . "\n";
+}
+?></pre>
+  <script>
+  function dsConsoleCopy() {
+      var t   = document.getElementById('ds-console-output').textContent;
+      var btn = document.getElementById('ds-copy-btn');
+      if (navigator.clipboard) {
+          navigator.clipboard.writeText(t).then(function() {
+              btn.textContent = '✓ Copié !';
+              setTimeout(function(){ btn.textContent = '📋 Copier'; }, 2200);
+          });
+      } else {
+          // Fallback
+          var ta = document.createElement('textarea');
+          ta.value = t; document.body.appendChild(ta); ta.select();
+          document.execCommand('copy'); document.body.removeChild(ta);
+          btn.textContent = '✓ Copié !';
+          setTimeout(function(){ btn.textContent = '📋 Copier'; }, 2200);
+      }
+  }
+  </script>
+</div>
+<?php endif; ?>
+
+<?php else: ?>
+<div class="info">Sélectionnez un script dans le menu de gauche.</div>
+<?php endif; ?>
+
 
 <?php else: ?>
 <div class="info">Sélectionnez un script dans le menu de gauche.</div>
