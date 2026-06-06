@@ -1427,7 +1427,10 @@ $def = $scriptDefs[$activeScript] ?? null;
 // ── Parsing du log en lignes structurées pour le tableau ──
 $structLog = array();
 
-// Fonction locale : résout un socid en nom de tiers
+// ── Helpers URL (cache) ──────────────────────────────────────────────────────
+$linkCache  = array();
+
+// Résout socid → nom de tiers (utilisé dans les parsers avec soc=N)
 $socCache = array();
 $resolveSoc = static function (int $id) use ($db, &$socCache): string {
     if (isset($socCache[$id])) return $socCache[$id];
@@ -1436,38 +1439,182 @@ $resolveSoc = static function (int $id) use ($db, &$socCache): string {
     return $socCache[$id];
 };
 
+/**
+ * Construit un lien <a> à partir d'une réf. + table DB + chemin URL.
+ * Retourne array('html', '<a href="...">REF</a>') pour le rendu HTML brut.
+ */
+$makeLink = static function (string $table, string $ref, string $urlPath) use ($db, &$linkCache): array {
+    $key = $table . ':' . $ref;
+    if (isset($linkCache[$key])) return $linkCache[$key];
+    $r = $db->query("SELECT rowid FROM " . MAIN_DB_PREFIX . $table . " WHERE ref='" . $db->escape($ref) . "'");
+    if ($r && ($o = $db->fetch_object($r)) && !empty($o->rowid)) {
+        $url  = DOL_URL_ROOT . $urlPath . (int)$o->rowid;
+        $html = '<a href="' . $url . '">' . htmlspecialchars($ref) . '</a>';
+    } else {
+        $html = htmlspecialchars($ref);
+    }
+    return ($linkCache[$key] = array('html', $html));
+};
+
+/** Lien tiers par nom (generate-thirdparty log au format « - NAME [TYPE] ») */
+$makeSocLink = static function (string $name) use ($db, &$linkCache): array {
+    $key = 'societe_nom:' . $name;
+    if (isset($linkCache[$key])) return $linkCache[$key];
+    $r = $db->query("SELECT rowid FROM " . MAIN_DB_PREFIX . "societe WHERE nom='" . $db->escape($name) . "'");
+    if ($r && ($o = $db->fetch_object($r)) && !empty($o->rowid)) {
+        $url  = DOL_URL_ROOT . '/societe/card.php?socid=' . (int)$o->rowid;
+        $html = '<a href="' . $url . '">' . htmlspecialchars($name) . '</a>';
+    } else {
+        $html = htmlspecialchars($name);
+    }
+    return ($linkCache[$key] = array('html', $html));
+};
+
 foreach ($scriptLog as $entry) {
-    $msg  = $entry['msg'];
-    $lvl  = $entry['level'];
+    $msg   = $entry['msg'];
+    $lvl   = $entry['level'];
     $cells = array();
 
+    // ── generate-thirdparty ─────────────────────────────────────────────────
     if ($activeScript === 'generate-thirdparty') {
-        // ✓ #N - Company xxx [Type] [cli=CODE, fourn=CODE]
+        // ✓ #N - NAME [TYPE] [cli=CODE, fourn=CODE]
         if (preg_match('/- (.+?) \[(.+?)\](?:\s*\[cli=(.+?),\s*fourn=(.+?)\])?/', $msg, $m)) {
-            $cells = array($m[1], $m[2], $m[3] ?? '-', $m[4] ?? '-');
+            $cells = array(
+                $makeSocLink(trim($m[1])),
+                $m[2],
+                $m[3] ?? '-',
+                $m[4] ?? '-',
+            );
         }
 
+    // ── generate-product ────────────────────────────────────────────────────
     } elseif ($activeScript === 'generate-product') {
         // ✓ #N | REF | TYPE | PRICE € | STOCK | LOT
-        if (preg_match('/\| (\S+) \| (\w+) \| ([\d.]+) € \| (.*?) \| (.*)$/', $msg, $m)) {
-            $cells = array($m[1], $m[2], $m[3] . ' €', trim($m[4]), trim($m[5]));
+        if (preg_match('/\| (\S+) \| (\w+) \| ([\d.]+).*\| (.*?) \| (.*)$/', $msg, $m)) {
+            $cells = array(
+                $makeLink('product', $m[1], '/product/card.php?id='),
+                $m[2], $m[3] . ' €', trim($m[4]), trim($m[5]),
+            );
         } elseif (preg_match('/- (\S+)\s+\(([\d.]+)/', $msg, $m)) {
-            // Ancien format fallback
-            $isService = (strpos($m[1], 'SRV') !== false);
-            $cells = array($m[1], $isService ? 'Service' : 'Produit', $m[2] . ' €', '', '');
+            // Ancien format
+            $cells = array(
+                $makeLink('product', $m[1], '/product/card.php?id='),
+                (strpos($m[1], 'SRV') !== false ? 'Service' : 'Produit'),
+                $m[2] . ' €', '', '',
+            );
         }
+
+    // ── generate-invoice ────────────────────────────────────────────────────
+    } elseif ($activeScript === 'generate-invoice') {
+        // ✓ #N | REF | soc=SOCID | DATE | HT=X | TTC=Y
+        if (preg_match('/\| (\S+) \| soc=(\d+) \| (\S+) \| HT=([\d.]+) \| TTC=([\d.]+)/', $msg, $m)) {
+            $cells = array(
+                $makeLink('facture', $m[1], '/compta/facture/card.php?id='),
+                $resolveSoc((int)$m[2]), $m[3], $m[4] . ' €', $m[5] . ' €',
+            );
+        }
+
+    // ── generate-order ──────────────────────────────────────────────────────
+    } elseif ($activeScript === 'generate-order') {
+        // ✓ #N | REF | soc=SOCID | DATE | HT=X
+        if (preg_match('/\| (\S+) \| soc=(\d+) \| (\S+) \| HT=([\d.]+)/', $msg, $m)) {
+            $cells = array(
+                $makeLink('commande', $m[1], '/commande/card.php?id='),
+                $resolveSoc((int)$m[2]), $m[3], $m[4] . ' €',
+            );
+        }
+
+    // ── generate-proposal ───────────────────────────────────────────────────
+    } elseif ($activeScript === 'generate-proposal') {
+        // ✓ #N | REF | soc=SOCID | DATE | HT=X
+        if (preg_match('/\| (\S+) \| soc=(\d+) \| (\S+) \| HT=([\d.]+)/', $msg, $m)) {
+            $cells = array(
+                $makeLink('propal', $m[1], '/comm/propal/card.php?id='),
+                $resolveSoc((int)$m[2]), $m[3], $m[4] . ' €',
+            );
+        }
+
+    // ── generate-project ────────────────────────────────────────────────────
+    } elseif ($activeScript === 'generate-project') {
+        // ✓ #N | REF | TITLE | STATUS | AMOUNT € | BUDGET €
+        if (preg_match('/\| (\S+) \| (.+?) \| (.+?) \| ([\d ]+) €\S* \| ([\d ]+)/', $msg, $m)) {
+            $cells = array(
+                $makeLink('projet', $m[1], '/projet/card.php?id='),
+                trim($m[2]), trim($m[3]),
+                str_replace(' ', '', $m[4]) . ' €',
+                str_replace(' ', '', $m[5]) . ' €',
+            );
+        }
+
+    // ── generate-stock ──────────────────────────────────────────────────────
+    } elseif ($activeScript === 'generate-stock') {
+        // ✓ #N | REF | WH | +QTY [| LOT/SN]
+        if (preg_match('/\| (\S+) \| (\S+) \| \+(\d+)(?: unités?)?(?: \| (.+))?$/', $msg, $m)) {
+            $cells = array(
+                $makeLink('product', $m[1], '/product/card.php?id='),
+                $makeLink('entrepot', $m[2], '/product/stock/card.php?id='),
+                '+' . $m[3], $m[4] ?? '',
+            );
+        }
+
+    // ── generate-warehouse ──────────────────────────────────────────────────
     } elseif ($activeScript === 'generate-warehouse') {
         // ✓ #N | REF | LABEL | VILLE
         if (preg_match('/\| (\S+) \| (.+?) \| (.+?)$/', $msg, $m)) {
-            $cells = array($m[1], trim($m[2]), trim($m[3]));
+            $cells = array(
+                $makeLink('entrepot', $m[1], '/product/stock/card.php?id='),
+                trim($m[2]), trim($m[3]),
+            );
         }
 
+    // ── generate-expedition ─────────────────────────────────────────────────
+    } elseif ($activeScript === 'generate-expedition') {
+        // ✓ #N | REF | soc=SOCID | DATE
+        if (preg_match('/\| (\S+) \| soc=(\d+) \| (.+)$/', $msg, $m)) {
+            $cells = array(
+                $makeLink('expedition', $m[1], '/expedition/card.php?id='),
+                $resolveSoc((int)$m[2]), trim($m[3]),
+            );
+        }
+
+    // ── generate-supplier-order ─────────────────────────────────────────────
+    } elseif ($activeScript === 'generate-supplier-order') {
+        // ✓ #N | REF | soc=SOCID | DATE | HT=X
+        if (preg_match('/\| (\S+) \| soc=(\d+) \| (\S+) \| HT=([\d.]+)/', $msg, $m)) {
+            $cells = array(
+                $makeLink('commande_fournisseur', $m[1], '/fourn/commande/card.php?id='),
+                $resolveSoc((int)$m[2]), $m[3], $m[4] . ' €',
+            );
+        }
+
+    // ── generate-reception ──────────────────────────────────────────────────
+    } elseif ($activeScript === 'generate-reception') {
+        // ✓ #N | REF | soc=SOCID | DATE
+        if (preg_match('/\| (\S+) \| soc=(\d+) \| (.+)$/', $msg, $m)) {
+            $cells = array(
+                $makeLink('reception', $m[1], '/reception/card.php?id='),
+                $resolveSoc((int)$m[2]), trim($m[3]),
+            );
+        }
+
+    // ── generate-supplier-invoice ───────────────────────────────────────────
+    } elseif ($activeScript === 'generate-supplier-invoice') {
+        // ✓ #N | REF | soc=SOCID | DATE | HT=X | TTC=Y
+        if (preg_match('/\| (\S+) \| soc=(\d+) \| (\S+) \| HT=([\d.]+) \| TTC=([\d.]+)/', $msg, $m)) {
+            $cells = array(
+                $makeLink('facture_fourn', $m[1], '/fourn/facture/card.php?id='),
+                $resolveSoc((int)$m[2]), $m[3], $m[4] . ' €', $m[5] . ' €',
+            );
+        }
+
+    // ── purge-data ──────────────────────────────────────────────────────────
     } elseif ($activeScript === 'purge-data') {
-        // Lignes libres : on affiche tout ce qui est success/error/warn
         if ($lvl !== 'info' && !empty($msg) && !preg_match('/^[\x{2550}\x{2554}\x{2557}]/u', $msg)) {
-            $icon = $lvl === 'success' ? '✓' : ($lvl === 'error' ? '✗' : '!');
+            $icon  = $lvl === 'success' ? '✓' : ($lvl === 'error' ? '✗' : '!');
             $cells = array($icon, $lvl, $msg);
         }
+
+    // ── fallback ────────────────────────────────────────────────────────────
     } else {
         if ($lvl !== 'info' && !empty($msg)) {
             $cells = array($lvl, $msg);
@@ -1476,7 +1623,7 @@ foreach ($scriptLog as $entry) {
 
     if (!empty($cells)) {
         $structLog[] = array('level' => $lvl, 'cells' => $cells);
-    } elseif ($lvl !== 'info' && !empty($msg) && !preg_match('/^[✓═╔╗]/u', $msg)) {
+    } elseif ($lvl !== 'info' && !empty($msg) && !preg_match('/^[✓═╔╗✗]/u', $msg)) {
         $structLog[] = array('level' => $lvl, 'cells' => array($msg));
     }
 }
@@ -1681,9 +1828,9 @@ foreach ($pagedLog as $row):
 <tr class="oddeven">
 	<td><?php print $badge; ?></td>
 	<?php if ($nCells === 1): ?>
-		<td colspan="<?php print max(1, $nbCols); ?>"><?php print htmlspecialchars($row['cells'][0]); ?></td>
+		<td colspan="<?php print max(1, $nbCols); ?>"><?php $c0=$row['cells'][0]; print (is_array($c0)&&$c0[0]==='html')?$c0[1]:htmlspecialchars((string)$c0); ?></td>
 	<?php else: ?>
-		<?php foreach ($row['cells'] as $cell): ?><td><?php print htmlspecialchars((string)$cell); ?></td><?php endforeach; ?>
+		<?php foreach ($row['cells'] as $cell): ?><td><?php print (is_array($cell)&&$cell[0]==='html')?$cell[1]:htmlspecialchars((string)$cell); ?></td><?php endforeach; ?>
 		<?php for ($i = $nCells; $i < $nbCols; $i++): ?><td></td><?php endfor; ?>
 	<?php endif; ?>
 </tr>
