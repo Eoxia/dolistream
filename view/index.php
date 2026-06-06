@@ -1309,7 +1309,7 @@ if (!empty($dsDbConf[$activeScript])) {
 	$dbUrl  = $_conf['url'];
 	$_sql   = str_replace('{NB}', 25, $_conf['select']);
 	$_res   = $db->query($_sql);
-	while ($_res && ($_row = $db->fetch_array($_res))) $dbResults[] = $_row;
+	while ($_res && ($_obj = $db->fetch_object($_res))) $dbResults[] = (array) $_obj;
 }
 
 // ── Définitions des formulaires avec colonnes de résultat ─────────────────────
