@@ -1248,7 +1248,7 @@ if ($action === 'run' && isset($dsDbConf[$script])) {
 	$dbUrl  = $_conf['url'];
 	$_sql   = str_replace(array('{MAX}', '{NB}'), array((int)$preExecMaxRowid, (int)($nb ?: 500)), $_conf['select']);
 	$_res   = $db->query($_sql);
-	while ($_res && ($_row = $db->fetch_assoc($_res))) {
+	while ($_res && ($_row = $db->fetch_array($_res))) {
 		$dbResults[] = $_row;
 	}
 	// Label ActionComm
