@@ -1,3 +1,10 @@
+# DoliStream — French (fr_FR)
+# Contient UNIQUEMENT les clés spécifiques au module.
+# Les clés du core Dolibarr (Ref, Date, Status, Label, ThirdParty, Supplier,
+# Product, Service, Stock, Batch, AmountHT, AmountTTC, Quantity, Warehouse,
+# DeliveryDate, CustomerCode, SupplierCode, Town, Title, Budget, Prospect, Type)
+# sont résolues via loadLangs() et ne sont PAS redéfinies ici.
+# ──────────────────────────────────────────────────────────────────────────────
 DoliStreamName = DoliStream
 DoliStreamDesc = Génération et purge de données en masse pour les tests de développement Dolibarr.
 DoliStreamWarningDevOnly = ATTENTION : Ce module est RÉSERVÉ AU DÉVELOPPEMENT. Ne jamais activer en production !
@@ -12,37 +19,55 @@ Tiers = Tiers
 Products = Produits
 Invoices = Factures
 Orders = Commandes
-Proposals = Devis
+Proposals = Propositions
+# ── Labels de scripts ──────────────────────────────────────────────────────────
 GenerateThirdparties = Générer des tiers
 GenerateProducts = Générer des produits
 GenerateInvoices = Générer des factures
 GenerateOrders = Générer des commandes
-GenerateProposals = Générer des devis
+GenerateProposals = Générer des propositions
+GenerateProjects = Générer des Projets / Opportunités
+GenerateStock = Générer du Stock
+GenerateWarehouses = Générer des Entrepôts
+GenerateShipments = Générer des Expéditions
+GenerateSupplierOrders = Générer des Commandes fournisseur
+GenerateSupplierReceptions = Générer des Réceptions fournisseur
+GenerateSupplierInvoices = Générer des Factures fournisseur
+# ── Infobulles de scripts ──────────────────────────────────────────────────────
+HintThirdparty = Crée des sociétés avec noms, villes et contacts fictifs. Requis avant de générer des documents.
+HintProduct = Insère des produits/services avec types, prix et stock aléatoires.
+HintInvoice = Crée des factures clients validées avec des tiers et produits existants choisis aléatoirement.
+HintOrder = Crée des commandes clients validées avec des tiers et produits existants choisis aléatoirement.
+HintProposal = Crée des propositions avec des tiers et produits existants choisis aléatoirement.
+HintProject = Crée des projets avec suivi d'opportunité (statut aléatoire, montant aléatoire).
+HintStock = Ajoute du stock aléatoire sur les produits existants dans les entrepôts existants. Prérequis : avoir des produits et au moins un entrepôt.
+HintWarehouse = Crée des entrepôts numérotés séquentiellement. Utile comme pré-requis avant de générer des expéditions avec gestion de stock.
+HintShipment = Crée des expéditions depuis les commandes client validées existantes.
+HintSupplierOrder = Crée des commandes fournisseur validées avec des tiers fournisseurs et des produits aléatoires.
+HintSupplierReception = Crée des réceptions depuis les commandes fournisseur validées existantes.
+HintSupplierInvoice = Crée des factures fournisseur validées avec des tiers fournisseurs et des produits aléatoires.
+HintPurge = Commencez TOUJOURS par le mode "test" pour voir ce qui serait supprimé. Mode "confirm" supprime réellement.
+DangerPurge = Ce script peut SUPPRIMER des données définitivement. NE PAS utiliser en production.
+# ── Formulaire ─────────────────────────────────────────────────────────────────
 NumberToGenerate = Nombre à générer
 ExecutionMode = Mode d'exécution
 CategoryToPurge = Catégorie à purger
 BeforeDate = Avant la date
 RunScript = Exécuter
-ExecutionResult = Résultat de l'exécution
-ScriptOutput = Sortie du script
-StatsThirdparties = Tiers en base
-StatsProducts = Produits en base
-StatsInvoices = Factures en base
-StatsOrders = Commandes en base
-StatsProposals = Devis en base
-HintThirdparty = Crée des sociétés avec noms, villes et contacts fictifs. Requis avant de générer des documents.
-HintProduct = Insère des produits/services avec références, libellés et prix aléatoires.
-HintInvoice = Crée des factures clients validées avec des tiers et produits existants choisis aléatoirement.
-HintOrder = Crée des commandes clients validées avec des tiers et produits existants choisis aléatoirement.
-HintProposal = Crée des devis avec des tiers et produits existants choisis aléatoirement.
-HintPurge = Commencez TOUJOURS par le mode "test" pour voir ce qui serait supprimé. Mode "confirm" supprime réellement.
-DangerPurge = Ce script peut SUPPRIMER des données définitivement. NE PAS utiliser en production.
+StopScript = ◼ Arrêter
+# ── Messages d'erreur ─────────────────────────────────────────────────────────
 NoClientThirdparty = Aucun tiers client trouvé. Générez d'abord des tiers.
 NoProduct = Aucun produit à vendre trouvé. Générez d'abord des produits.
 NoAdminUser = Aucun utilisateur avec le login "admin" trouvé. Créez-en un d'abord.
+NoResultFromDb = Aucun élément retourné par la base (vérifiez les logs ci-dessous).
+SelectScriptFromMenu = Sélectionnez un script dans le menu de gauche.
+# ── Résultats et UI ────────────────────────────────────────────────────────────
+ExecutionResult = Résultat de l'exécution
+ScriptOutput = Sortie du script
 ResultSuccess = succès
 ResultErrors = erreurs
 CopyOutput = Copier
+ClearConsole = Vider
 RefreshStats = Rafraîchir les stats
 TestMode = Mode test (simulation, rien n'est supprimé)
 ConfirmMode = Mode confirm (SUPPRESSION RÉELLE)
@@ -50,3 +75,89 @@ AllCategories = all (toutes les catégories)
 AllDates = all (toutes dates)
 AdminOnly = Administrateurs uniquement
 MainPage = Page principale
+CreatedElements = Éléments créés
+Prerequisites = Pré-requis
+ConsolePanel = Console
+SeeActionComm = 📌 Voir l'ActionComm enregistrée
+SerialQtyForcedToOne = Quantité forcée à 1 (numéro de série unique par unité)
+ExecutionAbortedByUser = Exécution interrompue par l'utilisateur.
+# ── Statistiques ───────────────────────────────────────────────────────────────
+StatsThirdparties = Tiers en base
+StatsProducts = Produits en base
+StatsInvoices = Factures en base
+StatsOrders = Commandes en base
+StatsProposals = Propositions en base
+StatsProjects = Projets/Opportunités
+# ── Colonnes spécifiques au module (sans équivalent dans le core) ──────────────
+ColNameCompany = Nom / Raison sociale
+ColCreatedAt = Créé le
+ColModifiedAt = Modifié le
+ColPriceHT = Prix HT
+ColOppAmount = Montant opp.
+ColOppStatus = Statut opp.
+ColOperation = Opération
+ColDetail = Détail
+ColPlace = Lieu
+ColReceptionDate = Date réception
+# ── Champs de formulaire spécifiques ──────────────────────────────────────────
+FieldThirdpartyType = Type de tiers
+FieldProductType = Type
+FieldNumber = Nombre
+FieldBatchMode = Lots/séries
+FieldAddStock = Ajouter du stock
+FieldStockQtyMax = Qté stock max
+FieldNbMovements = Nb mouvements
+FieldQtyMaxPerMov = Qté max / mouv.
+FieldProductTypeFilter = Type produit
+FieldRefPrefix = Préfixe de référence
+FieldThirdpartyLinkMode = Mode de liaison tiers
+FieldRefPrefixPlaceholder = ex: WH, ENT, DEPOT
+# ── Options de sélection spécifiques ──────────────────────────────────────────
+OptRandomMix = Aléatoire (mélange de tous les types)
+OptClient = Client
+OptSupplier = Fournisseur
+OptClientAndSupplier = Client & Fournisseur
+OptRandom = Aléatoire
+OptNoBatch = Sans lot/série
+OptLotNumbers = Numéros de lot
+OptSerialNumbers = Numéros de série
+OptSerialNumbers1u = Numéros de série (1u/série)
+OptYes = Oui
+OptNo = Non
+OptAll = Tous
+OptProductsOnly = Produits seulement
+OptServicesOnly = Services seulement
+OptFreeProject = Projet libre (sans tiers)
+OptLinkedThirdparty = Lié à un tiers aléatoire
+# ── Catégories de purge ────────────────────────────────────────────────────────
+PurgeCatInvoice = Factures clients
+PurgeCatOrder = Commandes clients
+PurgeCatProposal = Propositions
+PurgeCatProduct = Produits
+PurgeCatContact = Contacts
+PurgeCatThirdparty = Tiers
+PurgeCatPayment = Paiements
+PurgeCatProject = Projets
+PurgeCatBank = Banque
+PurgeCatEvent = Événements
+PurgeCatUser = Utilisateurs
+# ── Messages console ───────────────────────────────────────────────────────────
+LogBatchModuleDisabled = ⚠ Module Lots/Séries non activé → numérotation désactivée
+LogNoWarehouse = ⚠ Aucun entrepôt ouvert — stock ignoré. Créez-en via Pré-requis > Entrepôt.
+LogNoProduct = ✗ Aucun produit trouvé. Générez des produits d'abord.
+LogNoSupplier = ❌ Aucun fournisseur trouvé. Générez des tiers de type Fournisseur d'abord.
+LogNoValidatedOrder = ❌ Aucune commande client validée trouvée. Générez des commandes client d'abord.
+LogNoValidatedSupplierOrder = ❌ Aucune commande fournisseur validée. Générez des commandes fournisseur d'abord.
+LogReceptionModuleUnavailable = ❌ Module Réception non disponible dans cette version de Dolibarr.
+LogInvalidMode = ❌ Mode invalide. Utilisez "test" ou "confirm".
+LogInvalidDate = ❌ Date invalide. Format attendu : YYYY-MM-DD ou "all".
+LogTestModeNothing = → (mode test : rien ne sera supprimé)
+LogRollback = ✘ Erreurs détectées — ROLLBACK effectué
+LogCommit = ✔ Transaction validée (COMMIT)
+LogTestFinished = ℹ Mode test terminé — aucune donnée modifiée.
+
+FieldNumberPerOrder=Nombre de produit par commande
+FieldProductSelector=Sélecteur (Produit, lot, série)
+FieldProductWithStock=Produit avec du stock
+OptYes=Oui
+OptNo=Non

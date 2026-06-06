@@ -52,7 +52,7 @@ class modDolistream extends DolibarrModules
 		// ── Auteur ───────────────────────────────────────────────────────────
 		$this->editor_name          = 'Eoxia';
 		$this->editor_url           = 'https://www.eoxia.com';
-		$this->editor_squarred_logo = '';
+		$this->editor_squarred_logo = 'custom/dolistream/img/logo.png';
 
 		// ── Version ──────────────────────────────────────────────────────────
 		$this->version = '1.0.0';
@@ -61,7 +61,7 @@ class modDolistream extends DolibarrModules
 		$this->const_name = 'MAIN_MODULE_' . strtoupper($this->name);
 
 		// ── Icône ────────────────────────────────────────────────────────────
-		$this->picto = 'technic';
+		$this->picto = 'dolistream@dolistream';
 
 		// ── Fonctionnalités du module ────────────────────────────────────────
 		$this->module_parts = array(
@@ -74,7 +74,7 @@ class modDolistream extends DolibarrModules
 			'models'            => 0,
 			'printing'          => 0,
 			'theme'             => 0,
-			'css'               => array(),
+			'css'               => array('/custom/dolistream/css/dolistream.css'),
 			'js'                => array(),
 			'hooks'             => array(),
 			'moduleforexternal' => 0,
@@ -174,7 +174,7 @@ class modDolistream extends DolibarrModules
 		$generateItems = array(
 			'generate-product'    => 'Produits',
 			'generate-project'    => 'Projets / Opportunités',
-			'generate-proposal'   => 'Devis',
+			'generate-proposal' => 'Proposition',
 			'generate-order'      => 'Commandes',
 			'generate-expedition' => 'Expéditions',
 			'generate-invoice'    => 'Factures',

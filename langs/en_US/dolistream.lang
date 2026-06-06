@@ -1,3 +1,10 @@
+# DoliStream — English (en_US)
+# Contains ONLY module-specific keys.
+# Core Dolibarr keys (Ref, Date, Status, Label, ThirdParty, Supplier,
+# Product, Service, Stock, Batch, AmountHT, AmountTTC, Quantity, Warehouse,
+# DeliveryDate, CustomerCode, SupplierCode, Town, Title, Budget, Prospect, Type)
+# are resolved via loadLangs() and are NOT redefined here.
+# ──────────────────────────────────────────────────────────────────────────────
 DoliStreamName = DoliStream
 DoliStreamDesc = Bulk data generation and purge tools for Dolibarr development and load testing.
 DoliStreamWarningDevOnly = WARNING: This module is for DEVELOPMENT ONLY. Never activate on a production instance!
@@ -13,36 +20,54 @@ Products = Products
 Invoices = Invoices
 Orders = Orders
 Proposals = Proposals
+# ── Script labels ──────────────────────────────────────────────────────────────
 GenerateThirdparties = Generate Thirdparties
 GenerateProducts = Generate Products
 GenerateInvoices = Generate Invoices
 GenerateOrders = Generate Orders
 GenerateProposals = Generate Proposals
+GenerateProjects = Generate Projects / Opportunities
+GenerateStock = Generate Stock
+GenerateWarehouses = Generate Warehouses
+GenerateShipments = Generate Shipments
+GenerateSupplierOrders = Generate Supplier Orders
+GenerateSupplierReceptions = Generate Supplier Receipts
+GenerateSupplierInvoices = Generate Supplier Invoices
+# ── Script hints ───────────────────────────────────────────────────────────────
+HintThirdparty = Creates companies with random names, towns and contacts. Required before generating documents.
+HintProduct = Inserts products/services with random types, prices and stock.
+HintInvoice = Creates validated customer invoices using randomly picked existing thirdparties and products.
+HintOrder = Creates validated customer orders using randomly picked existing thirdparties and products.
+HintProposal = Creates proposals with random existing thirdparties and products.
+HintProject = Creates projects with opportunity tracking (random status and amount).
+HintStock = Adds random stock to existing products in existing warehouses. Prerequisites: products and at least one warehouse.
+HintWarehouse = Creates sequentially numbered warehouses. Useful as a prerequisite before generating shipments with stock management.
+HintShipment = Creates shipments from existing validated customer orders.
+HintSupplierOrder = Creates validated supplier orders with random supplier thirdparties and products.
+HintSupplierReception = Creates receipts from existing validated supplier orders.
+HintSupplierInvoice = Creates validated supplier invoices with random supplier thirdparties and products.
+HintPurge = ALWAYS start with "test" mode to preview what would be deleted. "confirm" mode actually deletes data.
+DangerPurge = This script can PERMANENTLY DELETE data. DO NOT use in production.
+# ── Form ───────────────────────────────────────────────────────────────────────
 NumberToGenerate = Number to generate
 ExecutionMode = Execution mode
 CategoryToPurge = Category to purge
 BeforeDate = Before date
 RunScript = Run
-ExecutionResult = Execution result
-ScriptOutput = Script output
-StatsThirdparties = Thirdparties in DB
-StatsProducts = Products in DB
-StatsInvoices = Invoices in DB
-StatsOrders = Orders in DB
-StatsProposals = Proposals in DB
-HintThirdparty = Creates companies with random names, towns and contacts. Required before generating documents.
-HintProduct = Inserts products/services with random references, labels and prices.
-HintInvoice = Creates validated customer invoices using randomly picked existing thirdparties and products.
-HintOrder = Creates validated customer orders using randomly picked existing thirdparties and products.
-HintProposal = Creates draft proposals using randomly picked existing thirdparties and products.
-HintPurge = ALWAYS start with "test" mode to preview what would be deleted. "confirm" mode actually deletes data.
-DangerPurge = This script can PERMANENTLY DELETE data. DO NOT use in production.
+StopScript = ◼ Stop
+# ── Error messages ─────────────────────────────────────────────────────────────
 NoClientThirdparty = No client thirdparty found. Please generate thirdparties first.
 NoProduct = No sellable product found. Please generate products first.
 NoAdminUser = No user with login "admin" found. Please create one first.
+NoResultFromDb = No element returned from database (check the logs below).
+SelectScriptFromMenu = Select a script from the left menu.
+# ── Results and UI ─────────────────────────────────────────────────────────────
+ExecutionResult = Execution result
+ScriptOutput = Script output
 ResultSuccess = success
 ResultErrors = errors
 CopyOutput = Copy
+ClearConsole = Clear
 RefreshStats = Refresh stats
 TestMode = Test mode (simulation, nothing is deleted)
 ConfirmMode = Confirm mode (REAL DELETION)
@@ -50,3 +75,83 @@ AllCategories = all (all categories)
 AllDates = all (all dates)
 AdminOnly = Administrators only
 MainPage = Main page
+CreatedElements = Created elements
+Prerequisites = Prerequisites
+ConsolePanel = Console
+SeeActionComm = 📌 View recorded ActionComm
+SerialQtyForcedToOne = Quantity forced to 1 (unique serial number per unit)
+ExecutionAbortedByUser = Execution stopped by user.
+# ── Statistics ─────────────────────────────────────────────────────────────────
+StatsThirdparties = Thirdparties in DB
+StatsProducts = Products in DB
+StatsInvoices = Invoices in DB
+StatsOrders = Orders in DB
+StatsProposals = Proposals in DB
+StatsProjects = Projects/Opportunities
+# ── Module-specific columns (no core equivalent) ───────────────────────────────
+ColNameCompany = Name / Company
+ColCreatedAt = Created on
+ColModifiedAt = Modified on
+ColPriceHT = Unit price excl. tax
+ColOppAmount = Opp. amount
+ColOppStatus = Opp. status
+ColOperation = Operation
+ColDetail = Detail
+ColPlace = Location
+ColReceptionDate = Receipt date
+# ── Form fields ────────────────────────────────────────────────────────────────
+FieldThirdpartyType = Thirdparty type
+FieldProductType = Type
+FieldNumber = Number
+FieldBatchMode = Batches/serials
+FieldAddStock = Add stock
+FieldStockQtyMax = Max stock qty
+FieldNbMovements = Nb movements
+FieldQtyMaxPerMov = Max qty / mov.
+FieldProductTypeFilter = Product type
+FieldRefPrefix = Reference prefix
+FieldThirdpartyLinkMode = Thirdparty link mode
+FieldRefPrefixPlaceholder = e.g. WH, WRH, DEPOT
+# ── Module-specific select options ─────────────────────────────────────────────
+OptRandomMix = Random (mix of all types)
+OptClient = Customer
+OptSupplier = Supplier
+OptClientAndSupplier = Customer & Supplier
+OptRandom = Random
+OptNoBatch = No batch/serial
+OptLotNumbers = Lot numbers
+OptSerialNumbers = Serial numbers
+OptSerialNumbers1u = Serial numbers (1u/serial)
+OptYes = Yes
+OptNo = No
+OptAll = All
+OptProductsOnly = Products only
+OptServicesOnly = Services only
+OptFreeProject = Free project (no thirdparty)
+OptLinkedThirdparty = Linked to random thirdparty
+# ── Purge categories ───────────────────────────────────────────────────────────
+PurgeCatInvoice = Customer invoices
+PurgeCatOrder = Customer orders
+PurgeCatProposal = Proposals
+PurgeCatProduct = Products
+PurgeCatContact = Contacts
+PurgeCatThirdparty = Thirdparties
+PurgeCatPayment = Payments
+PurgeCatProject = Projects
+PurgeCatBank = Bank
+PurgeCatEvent = Events
+PurgeCatUser = Users
+# ── Console log messages ───────────────────────────────────────────────────────
+LogBatchModuleDisabled = ⚠ Batch/Serial module not active → numbering disabled
+LogNoWarehouse = ⚠ No open warehouse — stock ignored. Create one via Prerequisites > Warehouse.
+LogNoProduct = ✗ No product found. Generate products first.
+LogNoSupplier = ❌ No supplier found. Generate thirdparties of type Supplier first.
+LogNoValidatedOrder = ❌ No validated customer order found. Generate customer orders first.
+LogNoValidatedSupplierOrder = ❌ No validated supplier order found. Generate supplier orders first.
+LogReceptionModuleUnavailable = ❌ Receipt module not available in this Dolibarr version.
+LogInvalidMode = ❌ Invalid mode. Use "test" or "confirm".
+LogInvalidDate = ❌ Invalid date. Expected format: YYYY-MM-DD or "all".
+LogTestModeNothing = → (test mode: nothing will be deleted)
+LogRollback = ✘ Errors detected — ROLLBACK performed
+LogCommit = ✔ Transaction committed (COMMIT)
+LogTestFinished = ℹ Test mode complete — no data was modified.

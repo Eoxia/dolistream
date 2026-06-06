@@ -19,3 +19,6 @@ vendor/
 
 # PHP cache
 *.cache
+
+# Scratch scripts (debug / temp — jamais commités)
+scratch/

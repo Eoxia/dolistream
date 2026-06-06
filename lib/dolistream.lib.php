@@ -83,10 +83,26 @@ function dolinstreamGetClientIds(DoliDB $db): array
  * @param  DoliDB $db
  * @return int[]
  */
-function dolinstreamGetProductIds(DoliDB $db): array
+function dolinstreamGetProductIds(DoliDB $db, string $batchMode = 'all', string $inStock = 'all'): array
 {
 	$ids   = array();
-	$resql = $db->query('SELECT rowid FROM ' . MAIN_DB_PREFIX . 'product WHERE tosell=1');
+	$sql = 'SELECT p.rowid FROM ' . MAIN_DB_PREFIX . 'product p WHERE p.tosell=1';
+
+	if ($batchMode === 'no_batch') {
+		$sql .= ' AND p.tobatch = 0';
+	} elseif ($batchMode === 'lot') {
+		$sql .= ' AND p.tobatch = 1';
+	} elseif ($batchMode === 'serial') {
+		$sql .= ' AND p.tobatch = 2';
+	}
+
+	if ($inStock === 'yes') {
+		$sql .= ' AND IFNULL((SELECT SUM(reel) FROM ' . MAIN_DB_PREFIX . 'product_stock WHERE fk_product = p.rowid), 0) > 0';
+	} elseif ($inStock === 'no') {
+		$sql .= ' AND IFNULL((SELECT SUM(reel) FROM ' . MAIN_DB_PREFIX . 'product_stock WHERE fk_product = p.rowid), 0) <= 0';
+	}
+
+	$resql = $db->query($sql);
 	if ($resql) {
 		while ($row = $db->fetch_row($resql)) {
 			$ids[] = (int) $row[0];
@@ -123,7 +139,11 @@ function dolinstreamGetSupplierIds(DoliDB $db): array
 function dolinstreamGetClientOrderIds(DoliDB $db): array
 {
 	$ids   = array();
-	$resql = $db->query('SELECT rowid FROM ' . MAIN_DB_PREFIX . 'commande WHERE fk_statut = 1 ORDER BY rowid DESC LIMIT 200');
+	$sql = 'SELECT DISTINCT c.rowid FROM ' . MAIN_DB_PREFIX . 'commande c ';
+	$sql.= 'JOIN ' . MAIN_DB_PREFIX . 'commandedet cd ON cd.fk_commande = c.rowid ';
+	$sql.= 'WHERE c.fk_statut = 1 AND cd.product_type = 0 ';
+	$sql.= 'ORDER BY c.rowid DESC LIMIT 200';
+	$resql = $db->query($sql);
 	if ($resql) {
 		while ($row = $db->fetch_row($resql)) {
 			$ids[] = (int) $row[0];

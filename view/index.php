@@ -12,24 +12,29 @@
  */
 
 // ── Bootstrap Dolibarr ───────────────────────────────────────────────────────
-$res = 0;
-if (!$res && !empty($_SERVER["CONTEXT_DOCUMENT_ROOT"])) {
-	$res = @include str_replace('..', '', $_SERVER["CONTEXT_DOCUMENT_ROOT"]) . "/main.inc.php";
+// Guard : si ajax/run.php a déjà chargé main.inc.php, on l'ignore
+if (defined('DOLISTREAM_AJAX_RUN') && isset($db)) {
+	$res = 1; // déjà bootstrapé
+} else {
+	$res = 0;
+	if (!$res && !empty($_SERVER["CONTEXT_DOCUMENT_ROOT"])) {
+		$res = @include str_replace('..', '', $_SERVER["CONTEXT_DOCUMENT_ROOT"]) . "/main.inc.php";
+	}
+	$tmp  = empty($_SERVER['SCRIPT_FILENAME']) ? '' : $_SERVER['SCRIPT_FILENAME'];
+	$tmp2 = realpath(__FILE__);
+	$i    = strlen($tmp) - 1;
+	$j    = strlen($tmp2) - 1;
+	while ($i > 0 && $j > 0 && isset($tmp[$i]) && isset($tmp2[$j]) && $tmp[$i] == $tmp2[$j]) {
+		$i--;
+		$j--;
+	}
+	if (!$res && $i > 0 && file_exists(substr($tmp, 0, ($i + 1)) . "/main.inc.php")) {
+		$res = @include substr($tmp, 0, ($i + 1)) . "/main.inc.php";
+	}
+	if (!$res && file_exists("../../main.inc.php"))    { $res = @include "../../main.inc.php"; }
+	if (!$res && file_exists("../../../main.inc.php")) { $res = @include "../../../main.inc.php"; }
+	if (!$res) { die("Include of main fails"); }
 }
-$tmp  = empty($_SERVER['SCRIPT_FILENAME']) ? '' : $_SERVER['SCRIPT_FILENAME'];
-$tmp2 = realpath(__FILE__);
-$i    = strlen($tmp) - 1;
-$j    = strlen($tmp2) - 1;
-while ($i > 0 && $j > 0 && isset($tmp[$i]) && isset($tmp2[$j]) && $tmp[$i] == $tmp2[$j]) {
-	$i--;
-	$j--;
-}
-if (!$res && $i > 0 && file_exists(substr($tmp, 0, ($i + 1)) . "/main.inc.php")) {
-	$res = @include substr($tmp, 0, ($i + 1)) . "/main.inc.php";
-}
-if (!$res && file_exists("../../main.inc.php"))    { $res = @include "../../main.inc.php"; }
-if (!$res && file_exists("../../../main.inc.php")) { $res = @include "../../../main.inc.php"; }
-if (!$res) { die("Include of main fails"); }
 
 // ── Bibliothèques ────────────────────────────────────────────────────────────
 require_once DOL_DOCUMENT_ROOT . '/societe/class/societe.class.php';
@@ -58,7 +63,7 @@ if (!$user->admin && !$user->hasRight('dolistream', 'generate', 'run')) {
 }
 
 // ── Traductions ───────────────────────────────────────────────────────────────
-$langs->loadLangs(array('dolistream@dolistream', 'admin', 'companies', 'products', 'orders', 'bills', 'propal'));
+$langs->loadLangs(array('dolistream@dolistream', 'admin', 'companies', 'products', 'orders', 'bills', 'propal', 'stocks', 'sendings', 'productbatch', 'projects', 'commercial'));
 
 // ── Paramètres ───────────────────────────────────────────────────────────────
 $action = GETPOST('action', 'aZ09');
@@ -97,10 +102,20 @@ $scriptLog = array();
 /**
  * Ajoute une ligne de log
  */
+$dsLiveLogFile = ''; // rempli quand action=run pour le streaming
+
+/**
+ * Ajoute une ligne de log
+ */
 function dsLog(string $msg, string $level = 'info'): void
 {
-	global $scriptLog;
-	$scriptLog[] = array('level' => $level, 'msg' => $msg, 'time' => date('H:i:s'));
+	global $scriptLog, $dsLiveLogFile;
+	$entry = array('level' => $level, 'msg' => $msg, 'time' => date('H:i:s'));
+	$scriptLog[] = $entry;
+	// Écrit immédiatement dans le fichier live pour le streaming JS
+	if ($dsLiveLogFile) {
+		file_put_contents($dsLiveLogFile, json_encode($entry, JSON_UNESCAPED_UNICODE) . "\n", FILE_APPEND | LOCK_EX);
+	}
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -109,82 +124,214 @@ function dsLog(string $msg, string $level = 'info'): void
 $dsDbConf = array(
 	'generate-thirdparty' => array(
 		'table'  => 'societe',
-		'head'   => array('Nom / Raison sociale', 'Type', 'Code client', 'Cree le'),
-		'select' => "SELECT s.rowid, s.nom, IF(s.client IN(1,2),'Client',IF(s.fournisseur=1,'Fournisseur','Autre')) AS type, IFNULL(s.code_client,'—') AS cc, DATE_FORMAT(s.datec,'%d/%m/%Y %H:%i') AS cree_le FROM " . MAIN_DB_PREFIX . "societe s ORDER BY s.rowid DESC LIMIT {NB}",
+		'head'   => array($langs->transnoentitiesnoconv('ColNameCompany'), $langs->transnoentitiesnoconv('Type'), $langs->transnoentitiesnoconv('CustomerCode'), $langs->transnoentitiesnoconv('ColCreatedAt')),
+		'select' => "SELECT s.rowid, s.nom, IF(s.client IN(1,2),'Client',IF(s.fournisseur=1,'Fournisseur','Autre')) AS type, IFNULL(s.code_client,'—') AS cc, DATE_FORMAT(DATE_ADD(s.datec, INTERVAL TIME_TO_SEC(TIMEDIFF(NOW(),UTC_TIMESTAMP())) SECOND),'%d/%m/%Y %H:%i') AS cree_le FROM " . MAIN_DB_PREFIX . "societe s ORDER BY s.rowid DESC LIMIT {NB}",
 		'url'    => '/societe/card.php?socid=',
 	),
 	'generate-product' => array(
 		'table'  => 'product',
-		'head'   => array('Libelle', 'Prix HT', 'Stock', 'Etat', 'Cree le'),
-		'select' => "SELECT p.rowid, p.ref, p.label, CONCAT(ROUND(p.price,2),' €') AS prix, CAST(IFNULL(ROUND(SUM(ps.reel),0),0) AS SIGNED) AS stock, IF(p.tosell=1,'En vente','Hors vente') AS statut, DATE_FORMAT(p.datec,'%d/%m/%Y %H:%i') AS cree_le FROM " . MAIN_DB_PREFIX . "product p LEFT JOIN " . MAIN_DB_PREFIX . "product_stock ps ON ps.fk_product=p.rowid GROUP BY p.rowid ORDER BY p.rowid DESC LIMIT {NB}",
+		'head'   => array($langs->transnoentitiesnoconv('Label'), $langs->transnoentitiesnoconv('ColPriceHT'), $langs->transnoentitiesnoconv('Stock'), $langs->transnoentitiesnoconv('Type'), $langs->transnoentitiesnoconv('Batch'), $langs->transnoentitiesnoconv('Status'), $langs->transnoentitiesnoconv('ColCreatedAt')),
+		'select' => "SELECT p.rowid, p.ref, p.label, CONCAT(ROUND(p.price,2),' €') AS prix, CAST(IFNULL(ROUND(SUM(ps.reel),0),0) AS SIGNED) AS stock, IF(p.fk_product_type=0,'Produit','Service') AS type_prod, IF(p.tobatch=0,'Non',IF(p.tobatch=1,'Lot','Serie')) AS lot_serie, IF(p.tosell=1,'En vente','Hors vente') AS statut, DATE_FORMAT(DATE_ADD(p.datec, INTERVAL TIME_TO_SEC(TIMEDIFF(NOW(),UTC_TIMESTAMP())) SECOND),'%d/%m/%Y %H:%i') AS cree_le FROM " . MAIN_DB_PREFIX . "product p LEFT JOIN " . MAIN_DB_PREFIX . "product_stock ps ON ps.fk_product=p.rowid GROUP BY p.rowid ORDER BY p.rowid DESC LIMIT {NB}",
 		'url'    => '/product/card.php?id=',
 	),
 	'generate-invoice' => array(
 		'table'  => 'facture',
-		'head'   => array('Tiers', 'Date', 'Montant TTC', 'Etat', 'Cree le'),
-		'select' => "SELECT f.rowid, f.ref, s.nom AS tiers, DATE_FORMAT(f.datef,'%d/%m/%Y') AS date_f, CONCAT(ROUND(f.total_ttc,2),' €') AS ttc, IF(f.paye=1,'Payee',IF(f.fk_statut=1,'Ouverte','Brouillon')) AS statut, DATE_FORMAT(f.datec,'%d/%m/%Y %H:%i') AS cree_le FROM " . MAIN_DB_PREFIX . "facture f LEFT JOIN " . MAIN_DB_PREFIX . "societe s ON s.rowid=f.fk_soc ORDER BY f.rowid DESC LIMIT {NB}",
+		'head'   => array($langs->transnoentitiesnoconv('ThirdParty'), $langs->transnoentitiesnoconv('Date'), $langs->transnoentitiesnoconv('AmountTTC'), $langs->transnoentitiesnoconv('Status'), $langs->transnoentitiesnoconv('ColCreatedAt')),
+		'select' => "SELECT f.rowid, f.ref, s.nom AS tiers, DATE_FORMAT(f.datef,'%d/%m/%Y') AS date_f, CONCAT(ROUND(f.total_ttc,2),' €') AS ttc, IF(f.paye=1,'Payee',IF(f.fk_statut=1,'Ouverte','Brouillon')) AS statut, DATE_FORMAT(DATE_ADD(f.datec, INTERVAL TIME_TO_SEC(TIMEDIFF(NOW(),UTC_TIMESTAMP())) SECOND),'%d/%m/%Y %H:%i') AS cree_le FROM " . MAIN_DB_PREFIX . "facture f LEFT JOIN " . MAIN_DB_PREFIX . "societe s ON s.rowid=f.fk_soc ORDER BY f.rowid DESC LIMIT {NB}",
 		'url'    => '/compta/facture/card.php?id=',
 	),
 	'generate-order' => array(
 		'table'  => 'commande',
-		'head'   => array('Tiers', 'Date', 'Montant HT', 'Etat', 'Cree le'),
-		'select' => "SELECT c.rowid, c.ref, s.nom AS tiers, DATE_FORMAT(c.date_commande,'%d/%m/%Y') AS date_c, CONCAT(ROUND(c.total_ht,2),' €') AS ht, IF(c.fk_statut=1,'Brouillon',IF(c.fk_statut=2,'Validee','Livree')) AS statut, DATE_FORMAT(c.datec,'%d/%m/%Y %H:%i') AS cree_le FROM " . MAIN_DB_PREFIX . "commande c LEFT JOIN " . MAIN_DB_PREFIX . "societe s ON s.rowid=c.fk_soc ORDER BY c.rowid DESC LIMIT {NB}",
+		'head'   => array($langs->transnoentitiesnoconv('FieldProductSelector'), $langs->transnoentitiesnoconv('FieldNumberPerOrder'), 'Expédiable', $langs->transnoentitiesnoconv('ThirdParty'), $langs->transnoentitiesnoconv('Date'), $langs->transnoentitiesnoconv('AmountHT'), $langs->transnoentitiesnoconv('Status'), $langs->transnoentitiesnoconv('ColCreatedAt')),
+		'select' => "SELECT c.rowid, c.ref, '-' AS selecteur, (SELECT COUNT(*) FROM " . MAIN_DB_PREFIX . "commandedet WHERE fk_commande = c.rowid) AS nb_prod, IF((SELECT COUNT(*) FROM " . MAIN_DB_PREFIX . "commandedet WHERE fk_commande = c.rowid AND product_type = 0) > 0, 'Oui', 'Non') AS expediable, s.nom AS tiers, DATE_FORMAT(c.date_commande,'%d/%m/%Y') AS date_c, CONCAT(ROUND(c.total_ht,2),' €') AS ht, IF(c.fk_statut=1,'Brouillon',IF(c.fk_statut=2,'Validee','Livree')) AS statut, DATE_FORMAT(DATE_ADD(c.date_creation, INTERVAL TIME_TO_SEC(TIMEDIFF(NOW(),UTC_TIMESTAMP())) SECOND),'%d/%m/%Y %H:%i') AS cree_le FROM " . MAIN_DB_PREFIX . "commande c LEFT JOIN " . MAIN_DB_PREFIX . "societe s ON s.rowid=c.fk_soc ORDER BY c.rowid DESC LIMIT {NB}",
 		'url'    => '/commande/card.php?id=',
 	),
 	'generate-proposal' => array(
 		'table'  => 'propal',
-		'head'   => array('Tiers', 'Date', 'Montant HT', 'Etat', 'Cree le'),
-		'select' => "SELECT p.rowid, p.ref, s.nom AS tiers, DATE_FORMAT(p.date,'%d/%m/%Y') AS date_p, CONCAT(ROUND(p.total_ht,2),' €') AS ht, IF(p.fk_statut=0,'Brouillon',IF(p.fk_statut=1,'Ouverte',IF(p.fk_statut=2,'Signee','Clot.'))) AS statut, DATE_FORMAT(p.datec,'%d/%m/%Y %H:%i') AS cree_le FROM " . MAIN_DB_PREFIX . "propal p LEFT JOIN " . MAIN_DB_PREFIX . "societe s ON s.rowid=p.fk_soc ORDER BY p.rowid DESC LIMIT {NB}",
+		'head'   => array($langs->transnoentitiesnoconv('ThirdParty'), $langs->transnoentitiesnoconv('Date'), $langs->transnoentitiesnoconv('AmountHT'), $langs->transnoentitiesnoconv('Status'), $langs->transnoentitiesnoconv('ColCreatedAt')),
+		'select' => "SELECT p.rowid, p.ref, s.nom AS tiers, DATE_FORMAT(p.datep,'%d/%m/%Y') AS date_p, CONCAT(ROUND(p.total_ht,2),' €') AS ht, IF(p.fk_statut=0,'Brouillon',IF(p.fk_statut=1,'Ouverte',IF(p.fk_statut=2,'Signee','Clot.'))) AS statut, DATE_FORMAT(DATE_ADD(p.datec, INTERVAL TIME_TO_SEC(TIMEDIFF(NOW(),UTC_TIMESTAMP())) SECOND),'%d/%m/%Y %H:%i') AS cree_le FROM " . MAIN_DB_PREFIX . "propal p LEFT JOIN " . MAIN_DB_PREFIX . "societe s ON s.rowid=p.fk_soc ORDER BY p.rowid DESC LIMIT {NB}",
 		'url'    => '/comm/propal/card.php?id=',
 	),
 	'generate-project' => array(
 		'table'  => 'projet',
-		'head'   => array('Titre', 'Montant opp.', 'Budget', 'Cree le'),
-		'select' => "SELECT p.rowid, p.ref, p.title, CONCAT(FORMAT(IFNULL(p.opp_amount,0),0),' €') AS opp, CONCAT(FORMAT(IFNULL(p.budget_amount,0),0),' €') AS budget, DATE_FORMAT(p.datec,'%d/%m/%Y %H:%i') AS cree_le FROM " . MAIN_DB_PREFIX . "projet p ORDER BY p.rowid DESC LIMIT {NB}",
+		'head'   => array($langs->transnoentitiesnoconv('Title'), $langs->transnoentitiesnoconv('ColOppAmount'), $langs->transnoentitiesnoconv('Budget'), $langs->transnoentitiesnoconv('ColCreatedAt')),
+		'select' => "SELECT p.rowid, p.ref, p.title, CONCAT(FORMAT(IFNULL(p.opp_amount,0),0),' €') AS opp, CONCAT(FORMAT(IFNULL(p.budget_amount,0),0),' €') AS budget, DATE_FORMAT(DATE_ADD(p.datec, INTERVAL TIME_TO_SEC(TIMEDIFF(NOW(),UTC_TIMESTAMP())) SECOND),'%d/%m/%Y %H:%i') AS cree_le FROM " . MAIN_DB_PREFIX . "projet p ORDER BY p.rowid DESC LIMIT {NB}",
 		'url'    => '/projet/card.php?id=',
 	),
 	'generate-expedition' => array(
 		'table'  => 'expedition',
-		'head'   => array('Tiers', 'Date livraison', 'Etat', 'Cree le'),
-		'select' => "SELECT e.rowid, e.ref, s.nom AS tiers, IFNULL(DATE_FORMAT(e.date_delivery,'%d/%m/%Y'),'—') AS date_liv, IF(e.fk_statut=0,'Brouillon',IF(e.fk_statut=1,'Validee','Livree')) AS statut, DATE_FORMAT(e.datec,'%d/%m/%Y %H:%i') AS cree_le FROM " . MAIN_DB_PREFIX . "expedition e LEFT JOIN " . MAIN_DB_PREFIX . "societe s ON s.rowid=e.fk_soc ORDER BY e.rowid DESC LIMIT {NB}",
+		'head'   => array($langs->transnoentitiesnoconv('ThirdParty'), $langs->transnoentitiesnoconv('DeliveryDate'), $langs->transnoentitiesnoconv('Status'), $langs->transnoentitiesnoconv('ColCreatedAt')),
+		'select' => "SELECT e.rowid, e.ref, s.nom AS tiers, IFNULL(DATE_FORMAT(e.date_delivery,'%d/%m/%Y'),'—') AS date_liv, IF(e.fk_statut=0,'Brouillon',IF(e.fk_statut=1,'Validee','Livree')) AS statut, DATE_FORMAT(DATE_ADD(e.date_creation, INTERVAL TIME_TO_SEC(TIMEDIFF(NOW(),UTC_TIMESTAMP())) SECOND),'%d/%m/%Y %H:%i') AS cree_le FROM " . MAIN_DB_PREFIX . "expedition e LEFT JOIN " . MAIN_DB_PREFIX . "societe s ON s.rowid=e.fk_soc ORDER BY e.rowid DESC LIMIT {NB}",
 		'url'    => '/expedition/card.php?id=',
 	),
 	'generate-supplier-order' => array(
 		'table'  => 'commande_fournisseur',
-		'head'   => array('Fournisseur', 'Date', 'Montant HT', 'Etat', 'Cree le'),
-		'select' => "SELECT c.rowid, c.ref, s.nom AS fourn, DATE_FORMAT(c.date_commande,'%d/%m/%Y') AS date_c, CONCAT(ROUND(c.total_ht,2),' €') AS ht, IF(c.fk_statut=3,'Validee',IF(c.fk_statut=5,'Livree','Autre')) AS statut, DATE_FORMAT(c.datec,'%d/%m/%Y %H:%i') AS cree_le FROM " . MAIN_DB_PREFIX . "commande_fournisseur c LEFT JOIN " . MAIN_DB_PREFIX . "societe s ON s.rowid=c.fk_soc ORDER BY c.rowid DESC LIMIT {NB}",
+		'head'   => array($langs->transnoentitiesnoconv('Supplier'), $langs->transnoentitiesnoconv('Date'), $langs->transnoentitiesnoconv('AmountHT'), $langs->transnoentitiesnoconv('Status'), $langs->transnoentitiesnoconv('ColCreatedAt')),
+		'select' => "SELECT c.rowid, c.ref, s.nom AS fourn, DATE_FORMAT(c.date_commande,'%d/%m/%Y') AS date_c, CONCAT(ROUND(c.total_ht,2),' €') AS ht, IF(c.fk_statut=3,'Validee',IF(c.fk_statut=5,'Livree','Autre')) AS statut, DATE_FORMAT(DATE_ADD(c.date_creation, INTERVAL TIME_TO_SEC(TIMEDIFF(NOW(),UTC_TIMESTAMP())) SECOND),'%d/%m/%Y %H:%i') AS cree_le FROM " . MAIN_DB_PREFIX . "commande_fournisseur c LEFT JOIN " . MAIN_DB_PREFIX . "societe s ON s.rowid=c.fk_soc ORDER BY c.rowid DESC LIMIT {NB}",
 		'url'    => '/fourn/commande/card.php?id=',
 	),
 	'generate-reception' => array(
 		'table'  => 'reception',
-		'head'   => array('Fournisseur', 'Date reception', 'Etat', 'Cree le'),
-		'select' => "SELECT r.rowid, r.ref, s.nom AS fourn, IFNULL(DATE_FORMAT(r.date_reception,'%d/%m/%Y'),'—') AS date_rec, IF(r.fk_statut=0,'Brouillon','Validee') AS statut, DATE_FORMAT(r.datec,'%d/%m/%Y %H:%i') AS cree_le FROM " . MAIN_DB_PREFIX . "reception r LEFT JOIN " . MAIN_DB_PREFIX . "societe s ON s.rowid=r.fk_soc ORDER BY r.rowid DESC LIMIT {NB}",
+		'head'   => array($langs->transnoentitiesnoconv('Supplier'), $langs->transnoentitiesnoconv('ColReceptionDate'), $langs->transnoentitiesnoconv('Status'), $langs->transnoentitiesnoconv('ColCreatedAt')),
+		'select' => "SELECT r.rowid, r.ref, s.nom AS fourn, IFNULL(DATE_FORMAT(r.date_reception,'%d/%m/%Y'),'—') AS date_rec, IF(r.fk_statut=0,'Brouillon','Validee') AS statut, DATE_FORMAT(DATE_ADD(r.date_creation, INTERVAL TIME_TO_SEC(TIMEDIFF(NOW(),UTC_TIMESTAMP())) SECOND),'%d/%m/%Y %H:%i') AS cree_le FROM " . MAIN_DB_PREFIX . "reception r LEFT JOIN " . MAIN_DB_PREFIX . "societe s ON s.rowid=r.fk_soc ORDER BY r.rowid DESC LIMIT {NB}",
 		'url'    => '/reception/card.php?id=',
 	),
 	'generate-supplier-invoice' => array(
 		'table'  => 'facture_fourn',
-		'head'   => array('Fournisseur', 'Date', 'Montant TTC', 'Etat', 'Cree le'),
-		'select' => "SELECT f.rowid, f.ref, s.nom AS fourn, DATE_FORMAT(f.datef,'%d/%m/%Y') AS date_f, CONCAT(ROUND(f.total_ttc,2),' €') AS ttc, IF(f.paye=1,'Payee',IF(f.fk_statut=1,'Ouverte','Brouillon')) AS statut, DATE_FORMAT(f.datec,'%d/%m/%Y %H:%i') AS cree_le FROM " . MAIN_DB_PREFIX . "facture_fourn f LEFT JOIN " . MAIN_DB_PREFIX . "societe s ON s.rowid=f.fk_soc ORDER BY f.rowid DESC LIMIT {NB}",
+		'head'   => array($langs->transnoentitiesnoconv('Supplier'), $langs->transnoentitiesnoconv('Date'), $langs->transnoentitiesnoconv('AmountTTC'), $langs->transnoentitiesnoconv('Status'), $langs->transnoentitiesnoconv('ColCreatedAt')),
+		'select' => "SELECT f.rowid, f.ref, s.nom AS fourn, DATE_FORMAT(f.datef,'%d/%m/%Y') AS date_f, CONCAT(ROUND(f.total_ttc,2),' €') AS ttc, IF(f.paye=1,'Payee',IF(f.fk_statut=1,'Ouverte','Brouillon')) AS statut, DATE_FORMAT(DATE_ADD(f.datec, INTERVAL TIME_TO_SEC(TIMEDIFF(NOW(),UTC_TIMESTAMP())) SECOND),'%d/%m/%Y %H:%i') AS cree_le FROM " . MAIN_DB_PREFIX . "facture_fourn f LEFT JOIN " . MAIN_DB_PREFIX . "societe s ON s.rowid=f.fk_soc ORDER BY f.rowid DESC LIMIT {NB}",
 		'url'    => '/fourn/facture/card.php?id=',
 	),
 	'generate-warehouse' => array(
 		'table'  => 'entrepot',
-		'head'   => array('Libelle', 'Lieu', 'Ville', 'Cree le'),
-		'select' => "SELECT e.rowid, e.ref, e.label, IFNULL(e.lieu,'—') AS lieu, IFNULL(e.town,'—') AS town, DATE_FORMAT(e.datec,'%d/%m/%Y %H:%i') AS cree_le FROM " . MAIN_DB_PREFIX . "entrepot e ORDER BY e.rowid DESC LIMIT {NB}",
+		'head'   => array($langs->transnoentitiesnoconv('Label'), $langs->transnoentitiesnoconv('ColPlace'), $langs->transnoentitiesnoconv('Town'), $langs->transnoentitiesnoconv('ColCreatedAt')),
+		'select' => "SELECT e.rowid, e.ref, e.label, IFNULL(e.lieu,'—') AS lieu, IFNULL(e.town,'—') AS town, DATE_FORMAT(DATE_ADD(e.datec, INTERVAL TIME_TO_SEC(TIMEDIFF(NOW(),UTC_TIMESTAMP())) SECOND),'%d/%m/%Y %H:%i') AS cree_le FROM " . MAIN_DB_PREFIX . "entrepot e ORDER BY e.rowid DESC LIMIT {NB}",
 		'url'    => '/product/stock/card.php?id=',
 	),
 	'generate-stock' => array(
-		'table'  => 'stock_mouvement',
-		'head'   => array('Produit', 'Entrepot', 'Quantite', 'Lot / Serie', 'Date'),
-		'select' => "SELECT m.rowid, p.ref AS produit, e.ref AS entrepot, m.qty AS qte, IFNULL(m.batch,'—') AS batch, DATE_FORMAT(m.datem,'%d/%m/%Y %H:%i') AS datem FROM " . MAIN_DB_PREFIX . "stock_mouvement m LEFT JOIN " . MAIN_DB_PREFIX . "product p ON p.rowid=m.fk_product LEFT JOIN " . MAIN_DB_PREFIX . "entrepot e ON e.rowid=m.fk_entrepot WHERE m.type_mouvement=0 ORDER BY m.rowid DESC LIMIT {NB}",
+		'table'  => 'product',
+		'head'   => array($langs->transnoentitiesnoconv('Label'), $langs->transnoentitiesnoconv('Stock'), $langs->transnoentitiesnoconv('Type'), $langs->transnoentitiesnoconv('Batch'), $langs->transnoentitiesnoconv('ColModifiedAt')),
+		'select' => "SELECT p.rowid, p.ref, p.label, CAST(IFNULL(ROUND(SUM(ps.reel),0),0) AS SIGNED) AS stock, IF(p.fk_product_type=0,'Produit','Service') AS type_prod, IF(p.tobatch=0,'Non',IF(p.tobatch=1,'Lot','Serie')) AS lot_serie, DATE_FORMAT(DATE_ADD(p.tms, INTERVAL TIME_TO_SEC(TIMEDIFF(NOW(),UTC_TIMESTAMP())) SECOND),'%d/%m/%Y %H:%i') AS modifie_le FROM " . MAIN_DB_PREFIX . "product p LEFT JOIN " . MAIN_DB_PREFIX . "product_stock ps ON ps.fk_product=p.rowid GROUP BY p.rowid ORDER BY p.rowid DESC LIMIT {NB}",
 		'url'    => '/product/card.php?id=',
 	),
 );
 $preExecMaxRowid = 0;
-$preExecMaxRowid = 0;
 
 // ACTIONS — logique inline, pas de subprocess
 // ═══════════════════════════════════════════════════════════════════════════════
+// ══ Handler AJAX : streaming de logs ligne à ligne ══════════════════════════════════
+if ($action === 'poll_log') {
+	if (session_status() === PHP_SESSION_ACTIVE) session_write_close();
+	$_pollScript = GETPOST('script', 'alphanohtml');
+	$_pollSince  = max(0, (int) GETPOST('since', 'int'));
+	$_pollFile   = DOL_DATA_ROOT . '/dolistream/live-' . preg_replace('/[^a-z0-9]/', '', session_id()) . '-' . preg_replace('/[^a-z0-9-]/', '', $_pollScript) . '.jsonl';
+	$_pollLines  = file_exists($_pollFile) ? file($_pollFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) : array();
+	header('Content-Type: application/json; charset=utf-8');
+	header('Cache-Control: no-store');
+	echo json_encode(array('lines' => array_slice($_pollLines, $_pollSince), 'total' => count($_pollLines)), JSON_UNESCAPED_UNICODE);
+	exit;
+}
+
+if ($action === 'mass_action_ship_orders') {
+	$toselect = GETPOST('toselect', 'array');
+	if (is_array($toselect) && count($toselect) > 0) {
+		require_once DOL_DOCUMENT_ROOT . '/commande/class/commande.class.php';
+		require_once DOL_DOCUMENT_ROOT . '/expedition/class/expedition.class.php';
+		
+		$warehouses = dolinstreamGetWarehouseIds($db);
+		$defaultWarehouse = !empty($warehouses) ? $warehouses[0] : 0;
+		$ok = $ko = 0;
+		
+		foreach ($toselect as $id) {
+			$id = (int)$id;
+			if ($id <= 0) continue;
+			
+			$order = new Commande($db);
+			if ($order->fetch($id) > 0) {
+				// 1. Valider la commande si elle est brouillon
+				if ($order->statut == Commande::STATUS_DRAFT) {
+					if ($order->valid($user) < 0) {
+						setEventMessage("Erreur validation commande $order->ref : " . $order->error, 'errors');
+						$ko++;
+						continue;
+					}
+				}
+				
+				// 2. Vérifier s'il y a des produits physiques
+				$hasPhysical = false;
+				foreach ($order->lines as $line) {
+					if ($line->product_type == 0) {
+						$hasPhysical = true;
+						break;
+					}
+				}
+				
+				// 3. Créer l'expédition
+				if ($hasPhysical) {
+					$exp = new Expedition($db);
+					$exp->socid = $order->socid;
+					$exp->origin = 'commande';
+					$exp->origin_id = $order->id;
+					$exp->date_delivery = dol_now();
+					$exp->note_private = 'Généré en masse par DoliStream';
+					
+					// Ajouter les lignes physiques
+					$hasValidLines = false;
+					foreach ($order->lines as $line) {
+						if ($line->product_type == 0) {
+							$ret = 0;
+							if (!empty($line->product_tobatch) && !empty($conf->productbatch->enabled)) {
+								// Produit avec lots/séries
+								$sql = "SELECT rowid as id_batch, qty FROM " . MAIN_DB_PREFIX . "product_batch WHERE fk_product = " . ((int)$line->fk_product) . " AND fk_warehouse = " . ((int)$defaultWarehouse) . " AND qty > 0 ORDER BY rowid ASC";
+								$resBatch = $db->query($sql);
+								$qty_needed = (float)$line->qty;
+								$dbatch = array('qty' => $qty_needed, 'ix_l' => $line->id, 'detail' => array());
+								if ($resBatch) {
+									while ($objBatch = $db->fetch_object($resBatch)) {
+										if ($qty_needed <= 0) break;
+										$take = min($qty_needed, $objBatch->qty);
+										$dbatch['detail'][] = array('id_batch' => $objBatch->id_batch, 'q' => $take);
+										$qty_needed -= $take;
+									}
+									$db->free($resBatch);
+								}
+								
+								if ($qty_needed > 0 && !empty($conf->global->STOCK_MUST_BE_ENOUGH_FOR_SHIPMENT)) {
+									$exp->error = "Stock par lot insuffisant pour le produit ID " . $line->fk_product;
+									$ret = -1;
+								} else {
+									$ret = $exp->addline_batch($dbatch, array(), $line);
+								}
+							} else {
+								// Produit standard
+								$ret = $exp->addline($defaultWarehouse, $line->id, (float)$line->qty, array(), (int)$line->fk_product);
+							}
+							
+							if ($ret > 0) $hasValidLines = true;
+							
+							if ($ret < 0) {
+								setEventMessage("Erreur ligne expédition (Produit ID " . $line->fk_product . ") : " . $exp->error, 'errors');
+							}
+						}
+					}
+					
+					if ($hasValidLines) {
+						$expid = $exp->create($user);
+						if ($expid > 0) {
+							// Valider l'expédition
+							if ($exp->valid($user) > 0) {
+								// Générer le document PDF (Bon de livraison)
+								$exp->generateDocument($exp->model_pdf ? $exp->model_pdf : 'rouget', $langs);
+								$ok++;
+							} else {
+								setEventMessage("Erreur validation expédition pour $order->ref : " . $exp->error, 'errors');
+								$ko++;
+							}
+						} else {
+							setEventMessage("Erreur création expédition pour $order->ref : " . $exp->error, 'errors');
+							$ko++;
+						}
+					} else {
+						// Impossible d'ajouter la moindre ligne
+						$ko++;
+					}
+				} else {
+					// Pas de produit physique, juste validée
+					$ok++;
+				}
+			} else {
+				$ko++;
+			}
+		}
+		
+		if ($ok > 0) setEventMessage($langs->trans('RecordsModified', $ok));
+	} else {
+		setEventMessage($langs->trans('NoRecordSelected'), 'warnings');
+	}
+	header('Location: ' . $_SERVER['PHP_SELF'] . '?script=' . urlencode(GETPOST('script', 'alphanohtml')));
+	exit;
+}
+
 if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 	// Vérification du token CSRF
 	if (!newToken() && empty($conf->global->DOLISTREAM_DISABLE_TOKEN_CHECK)) {
@@ -205,13 +352,32 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 	// Initialise le fichier de progression
 	dolinstreamProgress(0, 0);
 
+	// Prépare le fichier live pour le streaming AJAX (1 ligne JSON par dsLog)
+	global $dsLiveLogFile;
+	$_liveDir  = DOL_DATA_ROOT . '/dolistream/';
+	if (!is_dir($_liveDir)) @mkdir($_liveDir, 0755, true);
+	$dsLiveLogFile = $_liveDir . 'live-' . preg_replace('/[^a-z0-9]/', '', session_id()) . '-' . preg_replace('/[^a-z0-9-]/', '', $script) . '.jsonl';
+	@unlink($dsLiveLogFile); // repart de zéro à chaque exécution
+
 	$nb   = max(1, (int) GETPOST('nb', 'int'));
 	$mode = GETPOST('mode', 'alpha');
 	$opt  = GETPOST('opt', 'alpha');
 	$date = GETPOST('date', 'alpha');
 
-	// Libère le verrou de session pour que les requêtes AJAX de progression puissent aboutir
+	// ── Persistance de preExecMaxRowid pour le reload (fichier — plus fiable que session avec NOREQUIREMENU) ──
+	$_prevRowidFile = DOL_DATA_ROOT . '/dolistream/prev-'
+		. preg_replace('/[^a-z0-9]/', '', session_id()) . '-'
+		. preg_replace('/[^a-z0-9-]/', '', $script) . '.prev.json';
+	file_put_contents($_prevRowidFile, json_encode([
+		'rowid'  => $preExecMaxRowid,
+		'script' => $script,
+		'ts'     => time(),
+	]), LOCK_EX);
+
+	// Libère le verrou de session (session déjà potentiellement fermée par NOREQUIREMENU)
 	if (session_status() === PHP_SESSION_ACTIVE) {
+		$_SESSION['ds_prev_rowid']  = $preExecMaxRowid; // belt-and-suspenders
+		$_SESSION['ds_prev_script'] = $script;
 		session_write_close();
 	}
 
@@ -236,7 +402,7 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 			'Thomas', 'Emma', 'Lucas', 'Léa', 'Maxime', 'Camille',
 		);
 
-		dsLog($langs->trans('GenerateThirdparties') . ' : ' . $nb);
+		dsLog($langs->transnoentitiesnoconv('GenerateThirdparties') . ' : ' . $nb);
 
 		// Correspondance type → flags Dolibarr
 		// client : 0=non-client, 1=client, 2=prospect  |  fournisseur : 0/1
@@ -302,7 +468,7 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 				$ko++;
 			}
 		}
-		dsLog('─── ' . $ok . ' ' . $langs->trans('ResultSuccess') . ', ' . $ko . ' ' . $langs->trans('ResultErrors') . ' ───');
+		dsLog('─── ' . $ok . ' ' . $langs->transnoentitiesnoconv('ResultSuccess') . ', ' . $ko . ' ' . $langs->transnoentitiesnoconv('ResultErrors') . ' ───');
 
 	// ════════════════════════════════════════════════════════════════════════
 	} elseif ($script === 'generate-product') {
@@ -345,6 +511,21 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 			$productMod = new $productAddonName();
 		}
 
+		// Préfixe de référence : AAMM (année 2 chiffres + mois 2 chiffres)
+		$_refDateBase = date('ym'); // ex: 2606
+
+		// Séquence de départ = MAX(rowid) du dernier produit en base
+		// À chaque lancement on repart du dernier id connu → +1, +2, ...
+		$_lastRefNum = 0;
+		$_rRes = $db->query('SELECT MAX(rowid) AS m FROM ' . MAIN_DB_PREFIX . 'product');
+		if ($_rRes && ($_rRow = $db->fetch_object($_rRes))) {
+			$_lastRefNum = (int)$_rRow->m;
+		}
+		// Prochain numéro à utiliser pour le fallback.
+		// Se recale après chaque produit créé (module ou fallback) sur last_ref_num + 1.
+		$_nextFallbackNum = $_lastRefNum + 1;
+		dsLog('Séquence de départ : dernier id=' . $_lastRefNum . ' → prochain = PRD-' . $_refDateBase . '-' . sprintf('%05d', $_nextFallbackNum));
+
 		$ok = $ko = 0;
 		for ($s = 0; $s < $nb; $s++) {
 			$product = new Product($db);
@@ -366,9 +547,11 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 			$product->price             = round(mt_rand(100, 99999) / 100, 2);
 			$product->tva_tx            = '20.000';
 
-			// Batch config avant création
-			if ($batchMode === 'lot')    $product->tobatch = 1;
-			if ($batchMode === 'serial') $product->tobatch = 2;
+			// Batch config avant création (uniquement produits physiques)
+			if ($product->type === 0) {
+				if ($batchMode === 'lot')    $product->tobatch = 1;
+				if ($batchMode === 'serial') $product->tobatch = 2;
+			}
 
 			// Référence
 			if ($productMod !== null) {
@@ -377,17 +560,34 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 				$productRef = '';
 			}
 			if (!$productRef || $productRef === -1) {
-				$productRef = ($product->type ? 'SRV' : 'PRD') . '-' . date('YmdHis') . '-' . sprintf('%04d', $s);
-				dsLog('⚠ #' . $s . ' — module ' . $productAddonName . ' non configuré, ref fallback', 'warn');
+				$productRef = ($product->type ? 'SRV' : 'PRD') . '-' . $_refDateBase . '-' . sprintf('%05d', $_nextFallbackNum);
+				dsLog('⚠ #' . ($s + 1) . ' — module ' . $productAddonName . ' non configuré, ref fallback : ' . $productRef, 'warn');
 			}
 			$product->ref   = $productRef;
 			$product->label = ($product->type ? 'Service ' : 'Produit ') . date('ymd-His') . '-' . sprintf('%04d', $s);
 
 			$ret = $product->create($fuser);
 			if ($ret < 0) {
-				dsLog('✗ #' . $s . ' — ' . $product->error, 'error');
+				dsLog('✗ #' . ($s + 1) . ' — ' . $product->error, 'error');
 				$ko++;
 				continue;
+			}
+
+			// Recale le compteur fallback sur la dernière réf effectivement attribuée
+			// Que ce soit via module (PRD-2606-01616) ou fallback, on repart toujours de là
+			if (preg_match('/^(?:PRD|SRV)-\d{4}-(\d+)$/', $productRef, $_refM)) {
+				$_nextFallbackNum = (int)$_refM[1] + 1;
+			} else {
+				$_nextFallbackNum++;
+			}
+
+			// UPDATE tobatch en DB après create() (le champ n'est pas toujours persisté par l'INSERT)
+			if ($product->type === 0 && $batchMode === 'serial') {
+				$db->query('UPDATE ' . MAIN_DB_PREFIX . 'product SET tobatch=2 WHERE rowid=' . (int)$product->id);
+				$product->tobatch = 2;
+			} elseif ($product->type === 0 && $batchMode === 'lot') {
+				$db->query('UPDATE ' . MAIN_DB_PREFIX . 'product SET tobatch=1 WHERE rowid=' . (int)$product->id);
+				$product->tobatch = 1;
 			}
 
 			$typeLabel  = $product->type ? 'Service' : 'Produit';
@@ -400,7 +600,7 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 				$whName = $whNames[$whId] ?? ('#' . $whId);
 				$qty    = mt_rand(1, $stockQtyMax);
 
-				if ($batchMode === 'serial') {
+				if ($batchMode === 'serial' && $product->tobatch == 2) {
 					for ($u = 1; $u <= $qty; $u++) {
 						$serial = 'SN-' . strtoupper(substr(md5(uniqid('', true)), 0, 8));
 						$mv = new MouvementStock($db);
@@ -408,20 +608,21 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 					}
 					$batchInfo = 'SN×' . $qty;
 					$stockInfo = '+' . $qty . ' @ ' . $whName;
-				} elseif ($batchMode === 'lot') {
+				} elseif ($batchMode === 'lot' && $product->tobatch == 1) {
 					$lot = 'LOT-' . date('Ymd') . '-' . sprintf('%04d', $s);
 					$mv = new MouvementStock($db);
 					$mv->_create($fuser, $product->id, $whId, $qty, 0, $product->price, 'DoliStream stock', '', '', 0, 0, $lot);
 					$batchInfo = $lot;
 					$stockInfo = '+' . $qty . ' @ ' . $whName;
 				} else {
+					// Pas de lot/série (service ou batch_mode=none)
 					$mv = new MouvementStock($db);
 					$mv->_create($fuser, $product->id, $whId, $qty, 0, $product->price, 'DoliStream stock');
 					$stockInfo = '+' . $qty . ' @ ' . $whName;
 				}
 			}
 
-			dsLog('✓ #' . $s . ' | ' . $product->ref . ' | ' . $typeLabel . ' | ' . $product->price . ' € | ' . $stockInfo . ' | ' . $batchInfo, 'success');
+			dsLog('✓ #' . ($s + 1) . ' | id=' . $product->id . ' | ' . $product->ref . ' | ' . $typeLabel . ' | ' . $product->price . ' € | ' . $stockInfo . ($batchInfo ? ' | ' . $batchInfo : ''), 'success');
 			$ok++;
 		}
 		dsLog('═ ' . $ok . ' OK, ' . $ko . ' erreur(s) ═');
@@ -431,11 +632,11 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 		$prodids = dolinstreamGetProductIds($db);
 
 		if (empty($socids)) {
-			dsLog('❌ ' . $langs->trans('NoClientThirdparty'), 'error');
+			dsLog('❌ ' . $langs->transnoentitiesnoconv('NoClientThirdparty'), 'error');
 			goto render;
 		}
 		if (empty($prodids)) {
-			dsLog('❌ ' . $langs->trans('NoProduct'), 'error');
+			dsLog('❌ ' . $langs->transnoentitiesnoconv('NoProduct'), 'error');
 			goto render;
 		}
 
@@ -500,11 +701,15 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 	// ════════════════════════════════════════════════════════════════════════
 	} elseif ($script === 'generate-order') {
 	// ════════════════════════════════════════════════════════════════════════
-		$socids  = dolinstreamGetClientIds($db);
-		$prodids = dolinstreamGetProductIds($db);
+		$nbLinesOpt  = GETPOST('nb_lines', 'int') > 0 ? GETPOST('nb_lines', 'int') : mt_rand(2, 5);
+		$batchMode   = GETPOST('batch_mode', 'alpha') ?: 'all';
+		$inStock     = GETPOST('in_stock', 'int') > 0 ? 'yes' : 'all';
 
-		if (empty($socids)) { dsLog('❌ ' . $langs->trans('NoClientThirdparty'), 'error'); goto render; }
-		if (empty($prodids)) { dsLog('❌ ' . $langs->trans('NoProduct'), 'error'); goto render; }
+		$socids  = dolinstreamGetClientIds($db);
+		$prodids = dolinstreamGetProductIds($db, $batchMode, $inStock);
+
+		if (empty($socids)) { dsLog('❌ ' . $langs->transnoentitiesnoconv('NoClientThirdparty'), 'error'); goto render; }
+		if (empty($prodids)) { dsLog('❌ ' . $langs->transnoentitiesnoconv('NoProduct'), 'error'); goto render; }
 
 		$dates = dolinstreamGetRandomDates();
 		dsLog($langs->transnoentities('GenerateOrders') . ' : ' . $nb);
@@ -527,7 +732,7 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 			// snapshot REPEATABLE READ qui bloque le module de numérotation.
 			$result = $obj->create($fuser);
 			if ($result >= 0) {
-				$nbLines = mt_rand(2, 5);
+				$nbLines = GETPOST('nb_lines', 'int') > 0 ? GETPOST('nb_lines', 'int') : mt_rand(2, 5);
 				$lineOk  = true;
 				for ($l = 0; $l < $nbLines; $l++) {
 					$pid     = $prodids[array_rand($prodids)];
@@ -559,7 +764,12 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 					if ($obj->valid($fuser) > 0) {
 						$obj->fetch($obj->id);
 						$ht = price2num($obj->total_ht, 'MT');
-						dsLog('✔ #' . $s . ' | ' . $obj->ref . ' | soc=' . $obj->socid . ' | ' . dol_print_date($obj->date_commande, 'day') . ' | HT=' . $ht, 'success');
+						$isShippable = 'Non';
+						foreach ($obj->lines as $line) {
+							if ($line->product_type == 0) { $isShippable = 'Oui'; break; }
+						}
+						$batchStr = $batchMode === 'no_batch' ? 'Sans_lot' : $batchMode;
+						dsLog('✔ #' . $s . ' | ' . $obj->ref . ' | batch=' . $batchStr . ' | nb=' . $nbLines . ' | ship=' . $isShippable . ' | soc=' . $obj->socid . ' | ' . dol_print_date($obj->date_commande, 'day') . ' | HT=' . $ht, 'success');
 						$ok++;
 					} else {
 						dsLog('✘ #' . $s . ' — ' . $obj->error, 'error');
@@ -582,7 +792,7 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 		$socids  = dolinstreamGetClientIds($db);
 		$prodids = dolinstreamGetProductIds($db);
 
-		if (empty($socids)) { dsLog('❌ ' . $langs->trans('NoClientThirdparty'), 'error'); goto render; }
+		if (empty($socids)) { dsLog('❌ ' . $langs->transnoentitiesnoconv('NoClientThirdparty'), 'error'); goto render; }
 
 		$dates = dolinstreamGetRandomDates();
 		dsLog($langs->transnoentities('GenerateProposals') . ' : ' . $nb);
@@ -607,7 +817,7 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 					$pid     = $prodids[array_rand($prodids)];
 					$product = new Product($db);
 					$product->fetch($pid);
-					$obj->addline(
+					$rLine = $obj->addline(
 						$obj->id,
 						$product->description,
 						$product->price,
@@ -621,6 +831,7 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 						0,
 						$product->type
 					);
+					if ($rLine < 0) dsLog('⚠ addline pid=' . $pid . ' : ' . $obj->error, 'warn');
 				}
 				// ── Même pattern que Facture::validate() et Commande::valid() ─────────
 				// Recharge l'objet + tiers + lignes AVANT valid() pour que le module
@@ -652,7 +863,7 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 		$socids      = ($projectMode === 'linked') ? dolinstreamGetClientIds($db) : array();
 
 		if ($projectMode === 'linked' && empty($socids)) {
-			dsLog('❌ ' . $langs->trans('NoClientThirdparty') . ' (mode lié)', 'error');
+			dsLog('❌ ' . $langs->transnoentitiesnoconv('NoClientThirdparty') . ' (mode lié)', 'error');
 			goto render;
 		}
 
@@ -822,8 +1033,8 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 
 			$batchStr = '';
 
-			if ($batchMode === 'lot') {
-				// Force tobatch = 1 si besoin
+			if ($batchMode === 'lot' && $product->type === 0) {
+				// Force tobatch=1 uniquement sur produits physiques
 				if ((int)$product->tobatch < 1) {
 					$db->query('UPDATE ' . MAIN_DB_PREFIX . 'product SET tobatch=1 WHERE rowid=' . (int)$productId);
 					$product->tobatch = 1;
@@ -839,25 +1050,26 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 					$ko++;
 				}
 
-			} elseif ($batchMode === 'serial') {
-				// Force tobatch = 2 si besoin
+			} elseif ($batchMode === 'serial' && $product->type === 0) {
+				// Force tobatch=2 uniquement sur produits physiques
+				// Règle Dolibarr : qty=1 par mouvement, un SN unique par unité
 				if ((int)$product->tobatch < 2) {
 					$db->query('UPDATE ' . MAIN_DB_PREFIX . 'product SET tobatch=2 WHERE rowid=' . (int)$productId);
 					$product->tobatch = 2;
 				}
-				// Une unité par mouvement avec numéro de série unique
-				$serials = array();
-				$ok_unit = 0;
+				$serials  = array();
+				$ok_unit  = 0;
 				for ($u = 1; $u <= $qty; $u++) {
 					$serial = 'SN-' . strtoupper(substr(md5(uniqid('', true)), 0, 8));
 					$serials[] = $serial;
 					$mouvement = new MouvementStock($db);
+					// qty forcé à 1 — règle numéro de série Dolibarr
 					$res = $mouvement->_create($fuser, $productId, $whId, 1, 0, $product->price, 'DoliStream stock', '', '', 0, 0, $serial);
 					if ($res > 0) $ok_unit++;
 				}
 				$batchStr = implode(', ', array_slice($serials, 0, 3)) . ($qty > 3 ? '…' : '');
 				if ($ok_unit > 0) {
-					dsLog('✓ #' . $s . ' | ' . $product->ref . ' | ' . $whName . ' | +' . $qty . ' unités | ' . $batchStr, 'success');
+					dsLog('✓ #' . $s . ' | ' . $product->ref . ' | ' . $whName . ' | +' . $qty . ' SN (qty=1/unité) | ' . $batchStr, 'success');
 					$ok++;
 				} else {
 					dsLog('✗ #' . $s . ' [' . $product->ref . '] série impossible', 'error');
@@ -885,7 +1097,7 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 		$orderIds = dolinstreamGetClientOrderIds($db);
 
 		if (empty($orderIds)) {
-			dsLog('❌ Aucune commande client validée trouvée. Générez des commandes client d\'abord.', 'error');
+			dsLog('❌ Aucune commande expédiable trouvée. Générez des commandes client (contenant des produits physiques) d\'abord.', 'error');
 			goto render;
 		}
 
@@ -1231,9 +1443,29 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 	}
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// RENDER
-// ═══════════════════════════════════════════════════════════════════════════════
+// ══ Mode AJAX : retourner JSON et quitter avant tout rendu HTML ═══════════════
+// Appelé depuis ajax/run.php qui a défini DOLISTREAM_AJAX_RUN.
+if (defined('DOLISTREAM_AJAX_RUN')) {
+	if ($action === 'run') {
+		$__ok   = count(array_filter($scriptLog, static fn($l) => $l['level'] === 'success'));
+		$__ko   = count(array_filter($scriptLog, static fn($l) => $l['level'] === 'error'));
+		$__warn = count(array_filter($scriptLog, static fn($l) => $l['level'] === 'warn'));
+		header('Content-Type: application/json; charset=utf-8');
+		header('Cache-Control: no-store');
+		echo json_encode([
+			'ok'           => $__ok,
+			'ko'           => $__ko,
+			'warn'         => $__warn,
+			'total'        => count($scriptLog),
+			'prev_max_rowid' => $preExecMaxRowid,
+		], JSON_UNESCAPED_UNICODE);
+	} else {
+		header('Content-Type: application/json; charset=utf-8');
+		echo json_encode(['error' => 'Expected action=run, got: ' . htmlspecialchars($action ?? '')]);
+	}
+	$db->close();
+	exit;
+}
 
 // Post-execution: console log + fichier + ActionComm
 $dbResults   = array();
@@ -1286,11 +1518,11 @@ render:
 
 // ── Stats base de données ────────────────────────────────────────────────────
 $statsMap = array(
-	'thirdparties' => array('icon' => '🏢', 'label' => $langs->trans('StatsThirdparties'), 'sql' => 'SELECT COUNT(*) FROM ' . MAIN_DB_PREFIX . 'societe'),
-	'products'     => array('icon' => '🏷️', 'label' => $langs->trans('StatsProducts'),     'sql' => 'SELECT COUNT(*) FROM ' . MAIN_DB_PREFIX . 'product'),
-	'invoices'     => array('icon' => '🧾', 'label' => $langs->trans('StatsInvoices'),      'sql' => 'SELECT COUNT(*) FROM ' . MAIN_DB_PREFIX . 'facture'),
-	'orders'       => array('icon' => '📦', 'label' => $langs->trans('StatsOrders'),        'sql' => 'SELECT COUNT(*) FROM ' . MAIN_DB_PREFIX . 'commande'),
-	'proposals'    => array('icon' => '📋', 'label' => $langs->trans('StatsProposals'),     'sql' => 'SELECT COUNT(*) FROM ' . MAIN_DB_PREFIX . 'propal'),
+	'thirdparties' => array('icon' => '🏢', 'label' => $langs->transnoentitiesnoconv('StatsThirdparties'), 'sql' => 'SELECT COUNT(*) FROM ' . MAIN_DB_PREFIX . 'societe'),
+	'products'     => array('icon' => '🏷️', 'label' => $langs->transnoentitiesnoconv('StatsProducts'),     'sql' => 'SELECT COUNT(*) FROM ' . MAIN_DB_PREFIX . 'product'),
+	'invoices'     => array('icon' => '🧾', 'label' => $langs->transnoentitiesnoconv('StatsInvoices'),      'sql' => 'SELECT COUNT(*) FROM ' . MAIN_DB_PREFIX . 'facture'),
+	'orders'       => array('icon' => '📦', 'label' => $langs->transnoentitiesnoconv('StatsOrders'),        'sql' => 'SELECT COUNT(*) FROM ' . MAIN_DB_PREFIX . 'commande'),
+	'proposals'    => array('icon' => '📋', 'label' => $langs->transnoentitiesnoconv('StatsProposals'),     'sql' => 'SELECT COUNT(*) FROM ' . MAIN_DB_PREFIX . 'propal'),
 	'projects'     => array('icon' => '🎯', 'label' => 'Projets/Opportunités',              'sql' => 'SELECT COUNT(*) FROM ' . MAIN_DB_PREFIX . 'projet'),
 );
 $stats = array();
@@ -1312,259 +1544,335 @@ if (!empty($dsDbConf[$activeScript])) {
 	while ($_res && ($_obj = $db->fetch_object($_res))) $dbResults[] = (array) $_obj;
 }
 
+// ── Reload post-AJAX : lit preExecMaxRowid depuis le fichier .prev.json ─────────────────
+$dsPrevMaxRowid = 0;
+if ($action !== 'run') {
+	// Priorité 1 : fichier prev (robuste même quand NOREQUIREMENU ferme la session)
+	$_prevFile = DOL_DATA_ROOT . '/dolistream/prev-'
+		. preg_replace('/[^a-z0-9]/', '', session_id()) . '-'
+		. preg_replace('/[^a-z0-9-]/', '', $activeScript) . '.prev.json';
+	if (file_exists($_prevFile) && (time() - filemtime($_prevFile)) < 120) {
+		$__prev = json_decode(file_get_contents($_prevFile), true);
+		if (isset($__prev['rowid']) && (int)$__prev['rowid'] > 0) {
+			$dsPrevMaxRowid = (int)$__prev['rowid'];
+		}
+		@unlink($_prevFile); // consommé en une fois
+	}
+	// Priorité 2 : session (si la session était encore active)
+	if ($dsPrevMaxRowid === 0 && !empty($_SESSION['ds_prev_script']) && $_SESSION['ds_prev_script'] === $activeScript) {
+		$dsPrevMaxRowid = (int)($_SESSION['ds_prev_rowid'] ?? 0);
+		unset($_SESSION['ds_prev_rowid'], $_SESSION['ds_prev_script']);
+	}
+	// Priorité 3 : paramètre URL ds_prev (fallback navigation)
+	if ($dsPrevMaxRowid === 0) {
+		$dsPrevMaxRowid = max(0, (int) GETPOST('ds_prev', 'int'));
+	}
+}
+if ($dsPrevMaxRowid > 0 && $action !== 'run' && empty($scriptLog)) {
+	// Lire le live .jsonl pour rouvrir la console avec les vrais logs
+	$_liveFile = DOL_DATA_ROOT . '/dolistream/live-'
+		. preg_replace('/[^a-z0-9]/', '', session_id()) . '-'
+		. preg_replace('/[^a-z0-9-]/', '', $activeScript) . '.jsonl';
+	if (file_exists($_liveFile)) {
+		foreach (file($_liveFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $__ll) {
+			$__e = json_decode($__ll, true);
+			if (is_array($__e)) $scriptLog[] = $__e;
+		}
+	}
+}
+// Compte les lignes vraiment nouvelles (rowid > prevMax) pour le compteur
+$dbNewCount = 0;
+if ($dsPrevMaxRowid > 0) {
+	foreach ($dbResults as $_r) {
+		$__v = array_values($_r);
+		if ((int)$__v[0] > $dsPrevMaxRowid) $dbNewCount++;
+	}
+}
+
 // ── Définitions des formulaires avec colonnes de résultat ─────────────────────
 $scriptDefs = array(
 	'generate-thirdparty' => array(
-		'label'   => $langs->trans('GenerateThirdparties'),
+		'label'   => $langs->transnoentitiesnoconv('GenerateThirdparties'),
 		'icon'    => 'company',
-		'hint'    => $langs->trans('HintThirdparty'),
+		'hint'    => $langs->transnoentitiesnoconv('HintThirdparty'),
 		'danger'  => false,
 		'perm'    => 'generate',
-		'columns' => array('Nom', 'Type', 'Code client', 'Code fourn.'),
+		'columns' => array($langs->transnoentitiesnoconv('ColNameCompany'), $langs->transnoentitiesnoconv('Type'), $langs->transnoentitiesnoconv('CustomerCode'), $langs->transnoentitiesnoconv('SupplierCode')),
 		'fields'  => array(
-			array('name' => 'nb', 'label' => $langs->trans('NumberToGenerate'), 'type' => 'number', 'default' => 10, 'min' => 1, 'max' => 10000),
+			array('name' => 'nb', 'label' => $langs->transnoentitiesnoconv('NumberToGenerate'), 'type' => 'number', 'default' => 10, 'min' => 1, 'max' => 10000),
 			array(
 				'name'    => 'opt',
-				'label'   => 'Type de tiers',
+				'label'   => $langs->transnoentitiesnoconv('FieldThirdpartyType'),
 				'type'    => 'select',
 				'options' => array(
-					'random'   => 'Aléatoire (mélange de tous les types)',
-					'prospect' => 'Prospect',
-					'client'   => 'Client',
-					'supplier' => 'Fournisseur',
-					'both'     => 'Client & Fournisseur',
+					'random'   => $langs->transnoentitiesnoconv('OptRandomMix'),
+					'prospect' => $langs->transnoentitiesnoconv('Prospect'),
+					'client'   => $langs->transnoentitiesnoconv('OptClient'),
+					'supplier' => $langs->transnoentitiesnoconv('OptSupplier'),
+					'both'     => $langs->transnoentitiesnoconv('OptClientAndSupplier'),
 				),
 				'default' => 'random',
 			),
 		),
 	),
 	'generate-product' => array(
-		'label'   => $langs->trans('GenerateProducts'),
+		'label'   => $langs->transnoentitiesnoconv('GenerateProducts'),
 		'icon'    => 'product',
-		'hint'    => 'Insère des produits/services avec types, prix et stock aléatoires.',
+		'hint'    => $langs->transnoentitiesnoconv('HintProduct'),
 		'danger'  => false,
 		'perm'    => 'generate',
-		'columns' => array('Réf.', 'Type', 'Prix HT', 'Stock', 'Lot / Série'),
+		'columns' => array($langs->transnoentitiesnoconv('Ref'), $langs->transnoentitiesnoconv('Type'), $langs->transnoentitiesnoconv('ColPriceHT'), $langs->transnoentitiesnoconv('Stock'), $langs->transnoentitiesnoconv('Batch')),
 		'fields'  => array(
-			array('name' => 'nb', 'label' => 'Nombre à générer', 'type' => 'number', 'default' => 10, 'min' => 1, 'max' => 10000),
+			// ① Type
 			array(
 				'name'    => 'product_type',
-				'label'   => 'Type',
+				'label'   => $langs->transnoentitiesnoconv('FieldProductType'),
 				'type'    => 'select',
 				'default' => 'random',
 				'options' => array(
-					'random'  => 'Aléatoire',
-					'product' => 'Produit physique',
-					'service' => 'Service',
+					'random'  => $langs->transnoentitiesnoconv('OptRandom'),
+					'product' => $langs->transnoentitiesnoconv('Product'),
+					'service' => $langs->transnoentitiesnoconv('Service'),
 				),
 			),
-			array(
-				'name'    => 'with_stock',
-				'label'   => 'Ajouter du stock',
-				'type'    => 'select',
-				'default' => 'no',
-				'options' => array(
-					'no'  => 'Non',
-					'yes' => 'Oui',
-				),
-			),
-			array('name' => 'stock_qty_max', 'label' => 'Qté stock max', 'type' => 'number', 'default' => 100, 'min' => 1, 'max' => 10000),
+			// ② Nombre à générer
+			array('name' => 'nb', 'label' => $langs->transnoentitiesnoconv('FieldNumber'), 'type' => 'number', 'default' => 10, 'min' => 1, 'max' => 10000),
+			// ③ Numérotation
 			array(
 				'name'    => 'batch_mode',
-				'label'   => 'Numérotation',
+				'label'   => $langs->transnoentitiesnoconv('FieldBatchMode'),
 				'type'    => 'select',
 				'default' => 'none',
 				'options' => array(
-					'none'   => 'Sans lot/série',
-					'lot'    => 'Numéros de lot',
-					'serial' => 'Numéros de série',
+					'none'   => $langs->transnoentitiesnoconv('OptNoBatch'),
+					'lot'    => $langs->transnoentitiesnoconv('OptLotNumbers'),
+					'serial' => $langs->transnoentitiesnoconv('OptSerialNumbers'),
 				),
 			),
+			// ④ Ajouter du stock
+			array(
+				'name'    => 'with_stock',
+				'label'   => $langs->transnoentitiesnoconv('FieldAddStock'),
+				'type'    => 'select',
+				'default' => 'no',
+				'options' => array(
+					'no'  => $langs->transnoentitiesnoconv('OptNo'),
+					'yes' => $langs->transnoentitiesnoconv('OptYes'),
+				),
+			),
+			// ⑤ Qté stock max
+			array('name' => 'stock_qty_max', 'label' => $langs->transnoentitiesnoconv('FieldStockQtyMax'), 'type' => 'number', 'default' => 100, 'min' => 1, 'max' => 10000),
 		),
 	),
 	'generate-invoice' => array(
-		'label'   => $langs->trans('GenerateInvoices'),
+		'label'   => $langs->transnoentitiesnoconv('GenerateInvoices'),
 		'icon'    => 'bill',
-		'hint'    => $langs->trans('HintInvoice'),
+		'hint'    => $langs->transnoentitiesnoconv('HintInvoice'),
 		'danger'  => false,
 		'perm'    => 'generate',
-		'columns' => array('Réf.', 'Date', 'Tiers', 'Montant HT', 'Montant TTC'),
+		'columns' => array($langs->transnoentitiesnoconv('Ref'), $langs->transnoentitiesnoconv('Date'), $langs->transnoentitiesnoconv('ThirdParty'), $langs->transnoentitiesnoconv('AmountHT'), $langs->transnoentitiesnoconv('AmountTTC')),
 		'fields'  => array(
-			array('name' => 'nb', 'label' => $langs->trans('NumberToGenerate'), 'type' => 'number', 'default' => 10, 'min' => 1, 'max' => 5000),
+			array('name' => 'nb', 'label' => $langs->transnoentitiesnoconv('NumberToGenerate'), 'type' => 'number', 'default' => 10, 'min' => 1, 'max' => 5000),
 		),
 	),
 	'generate-order' => array(
-		'label'   => $langs->trans('GenerateOrders'),
+		'label'   => $langs->transnoentitiesnoconv('GenerateOrders'),
 		'icon'    => 'order',
-		'hint'    => $langs->trans('HintOrder'),
+		'hint'    => $langs->transnoentitiesnoconv('HintOrder'),
 		'danger'  => false,
 		'perm'    => 'generate',
-		'columns' => array('Réf.', 'Date', 'Tiers', 'Montant HT'),
+		'columns' => array($langs->transnoentitiesnoconv('Ref'), $langs->transnoentitiesnoconv('FieldProductSelector'), $langs->transnoentitiesnoconv('FieldNumberPerOrder'), 'Expédiable', $langs->transnoentitiesnoconv('ThirdParty'), $langs->transnoentitiesnoconv('Date'), $langs->transnoentitiesnoconv('AmountHT')),
 		'fields'  => array(
-			array('name' => 'nb', 'label' => $langs->trans('NumberToGenerate'), 'type' => 'number', 'default' => 10, 'min' => 1, 'max' => 5000),
+			array('name' => 'nb', 'label' => $langs->transnoentitiesnoconv('NumberToGenerate'), 'type' => 'number', 'default' => 10, 'min' => 1, 'max' => 5000),
+			array('name' => 'nb_lines', 'label' => $langs->transnoentitiesnoconv('FieldNumberPerOrder'), 'type' => 'number', 'default' => 3, 'min' => 1, 'max' => 100),
+			array(
+				'name'    => 'batch_mode',
+				'label'   => $langs->transnoentitiesnoconv('FieldProductSelector'),
+				'type'    => 'select',
+				'default' => 'all',
+				'options' => array(
+					'all'      => $langs->transnoentitiesnoconv('OptAll'),
+					'no_batch' => $langs->transnoentitiesnoconv('OptNoBatch'),
+					'lot'      => $langs->transnoentitiesnoconv('OptLotNumbers'),
+					'serial'   => $langs->transnoentitiesnoconv('OptSerialNumbers'),
+				),
+			),
+			array(
+				'name'    => 'in_stock',
+				'label'   => $langs->transnoentitiesnoconv('FieldProductWithStock'),
+				'type'    => 'checkbox',
+				'default' => false,
+			),
 		),
 	),
 	'generate-proposal' => array(
-		'label'   => $langs->trans('GenerateProposals'),
+		'label'   => $langs->transnoentitiesnoconv('GenerateProposals'),
 		'icon'    => 'propal',
-		'hint'    => $langs->trans('HintProposal'),
+		'hint'    => $langs->transnoentitiesnoconv('HintProposal'),
 		'danger'  => false,
 		'perm'    => 'generate',
-		'columns' => array('Réf.', 'Date', 'Tiers', 'Montant HT'),
+		'columns' => array($langs->transnoentitiesnoconv('Ref'), $langs->transnoentitiesnoconv('Date'), $langs->transnoentitiesnoconv('ThirdParty'), $langs->transnoentitiesnoconv('AmountHT')),
 		'fields'  => array(
-			array('name' => 'nb', 'label' => $langs->trans('NumberToGenerate'), 'type' => 'number', 'default' => 10, 'min' => 1, 'max' => 5000),
+			array('name' => 'nb', 'label' => $langs->transnoentitiesnoconv('NumberToGenerate'), 'type' => 'number', 'default' => 10, 'min' => 1, 'max' => 5000),
 		),
 	),
 	'generate-project' => array(
-		'label'   => 'Générer des Projets / Opportunités',
+		'label'   => $langs->transnoentitiesnoconv('GenerateProjects'),
 		'icon'    => 'project',
-		'hint'    => 'Crée des projets avec suivi d\'opportunité (statut aléatoire, montant aléatoire).',
+		'hint'    => $langs->transnoentitiesnoconv('HintProject'),
 		'danger'  => false,
 		'perm'    => 'generate',
-		'columns' => array('Réf.', 'Titre', 'Statut opp.', 'Montant opp.', 'Budget'),
+		'columns' => array($langs->transnoentitiesnoconv('Ref'), $langs->transnoentitiesnoconv('Title'), $langs->transnoentitiesnoconv('ColOppStatus'), $langs->transnoentitiesnoconv('ColOppAmount'), $langs->transnoentitiesnoconv('Budget')),
 		'fields'  => array(
-			array('name' => 'nb', 'label' => $langs->trans('NumberToGenerate'), 'type' => 'number', 'default' => 10, 'min' => 1, 'max' => 2000),
+			array('name' => 'nb', 'label' => $langs->transnoentitiesnoconv('NumberToGenerate'), 'type' => 'number', 'default' => 10, 'min' => 1, 'max' => 2000),
 			array(
 				'name'    => 'mode',
-				'label'   => 'Mode de liaison tiers',
+				'label'   => $langs->transnoentitiesnoconv('FieldThirdpartyLinkMode'),
 				'type'    => 'select',
 				'options' => array(
-					'free'   => 'Projet libre (sans tiers)',
-					'linked' => 'Lié à un tiers aléatoire',
+					'free'   => $langs->transnoentitiesnoconv('OptFreeProject'),
+					'linked' => $langs->transnoentitiesnoconv('OptLinkedThirdparty'),
 				),
 				'default' => 'free',
 			),
 		),
 	),
 	'generate-stock' => array(
-		'label'   => 'Générer du Stock',
+		'label'   => $langs->transnoentitiesnoconv('GenerateStock'),
 		'icon'    => 'stock',
-		'hint'    => 'Ajoute du stock aléatoire sur les produits existants dans les entrepôts existants. Prérequis : avoir des produits et au moins un entrepôt.',
+		'hint'    => $langs->transnoentitiesnoconv('HintStock'),
 		'danger'  => false,
 		'perm'    => 'generate',
-		'columns' => array('Produit', 'Entrepôt', 'Quantité', 'Lot / Série'),
+		'columns' => array($langs->transnoentitiesnoconv('Product'), $langs->transnoentitiesnoconv('Warehouse'), $langs->transnoentitiesnoconv('Quantity'), $langs->transnoentitiesnoconv('Batch')),
 		'fields'  => array(
-			array('name' => 'nb',      'label' => 'Nb mouvements', 'type' => 'number', 'default' => 20,  'min' => 1, 'max' => 500),
-			array('name' => 'qty_max', 'label' => 'Qté max / mouv.', 'type' => 'number', 'default' => 50, 'min' => 1, 'max' => 1000),
+			array('name' => 'nb',      'label' => $langs->transnoentitiesnoconv('FieldNbMovements'),  'type' => 'number', 'default' => 20,  'min' => 1, 'max' => 500),
+			array('name' => 'qty_max', 'label' => $langs->transnoentitiesnoconv('FieldQtyMaxPerMov'), 'type' => 'number', 'default' => 50, 'min' => 1, 'max' => 1000),
 			array(
 				'name'    => 'product_type',
-				'label'   => 'Type produit',
+				'label'   => $langs->transnoentitiesnoconv('FieldProductTypeFilter'),
 				'type'    => 'select',
 				'default' => 'all',
 				'options' => array(
-					'all'     => 'Tous',
-					'product' => 'Produits seulement',
-					'service' => 'Services seulement',
+					'all'     => $langs->transnoentitiesnoconv('OptAll'),
+					'product' => $langs->transnoentitiesnoconv('OptProductsOnly'),
+					'service' => $langs->transnoentitiesnoconv('OptServicesOnly'),
 				),
 			),
 			array(
 				'name'    => 'batch_mode',
-				'label'   => 'Numérotation',
+				'label'   => $langs->transnoentitiesnoconv('FieldBatchMode'),
 				'type'    => 'select',
 				'default' => 'none',
 				'options' => array(
-					'none'   => 'Sans lot/série',
-					'lot'    => 'Numéros de lot',
-					'serial' => 'Numéros de série (1u/série)',
+					'none'   => $langs->transnoentitiesnoconv('OptNoBatch'),
+					'lot'    => $langs->transnoentitiesnoconv('OptLotNumbers'),
+					'serial' => $langs->transnoentitiesnoconv('OptSerialNumbers1u'),
 				),
 			),
 		),
 	),
 	'generate-warehouse' => array(
-		'label'   => 'Générer des Entrepôts',
+		'label'   => $langs->transnoentitiesnoconv('GenerateWarehouses'),
 		'icon'    => 'stock',
-		'hint'    => 'Crée des entrepôts numérotés séquentiellement. Utile comme pré-requis avant de générer des expéditions avec gestion de stock.',
+		'hint'    => $langs->transnoentitiesnoconv('HintWarehouse'),
 		'danger'  => false,
 		'perm'    => 'generate',
-		'columns' => array('Réf.', 'Libellé', 'Ville'),
+		'columns' => array($langs->transnoentitiesnoconv('Ref'), $langs->transnoentitiesnoconv('Label'), $langs->transnoentitiesnoconv('Town')),
 		'fields'  => array(
-			array('name' => 'nb', 'label' => 'Nombre à générer', 'type' => 'number', 'default' => 3, 'min' => 1, 'max' => 50),
+			array('name' => 'nb', 'label' => $langs->transnoentitiesnoconv('NumberToGenerate'), 'type' => 'number', 'default' => 3, 'min' => 1, 'max' => 50),
 			array(
 				'name'        => 'prefix',
-				'label'       => 'Préfixe de référence',
+				'label'       => $langs->transnoentitiesnoconv('FieldRefPrefix'),
 				'type'        => 'text',
 				'default'     => 'WH',
-				'placeholder' => 'ex: WH, ENT, DEPOT',
+				'placeholder' => $langs->transnoentitiesnoconv('FieldRefPrefixPlaceholder'),
 			),
 		),
 	),
 	'purge-data' => array(
-		'label'   => $langs->trans('PurgeData'),
+		'label'   => $langs->transnoentitiesnoconv('PurgeData'),
 		'icon'    => 'delete',
-		'hint'    => $langs->trans('HintPurge'),
+		'hint'    => $langs->transnoentitiesnoconv('HintPurge'),
 		'danger'  => true,
 		'perm'    => 'purge',
-		'columns' => array('Opération', 'Statut', 'Détail'),
+		'columns' => array($langs->transnoentitiesnoconv('ColOperation'), $langs->transnoentitiesnoconv('Status'), $langs->transnoentitiesnoconv('ColDetail')),
 		'fields'  => array(
 			array(
 				'name'    => 'mode',
-				'label'   => $langs->trans('ExecutionMode'),
+				'label'   => $langs->transnoentitiesnoconv('ExecutionMode'),
 				'type'    => 'select',
 				'options' => array(
-					'test'    => $langs->trans('TestMode'),
-					'confirm' => $langs->trans('ConfirmMode'),
+					'test'    => $langs->transnoentitiesnoconv('TestMode'),
+					'confirm' => $langs->transnoentitiesnoconv('ConfirmMode'),
 				),
 				'default' => 'test',
 			),
 			array(
 				'name'    => 'opt',
-				'label'   => $langs->trans('CategoryToPurge'),
+				'label'   => $langs->transnoentitiesnoconv('CategoryToPurge'),
 				'type'    => 'select',
 				'options' => array(
-					'all'        => $langs->trans('AllCategories'),
-					'invoice'    => 'invoice', 'order' => 'order', 'proposal' => 'proposal',
-					'product'    => 'product', 'contact' => 'contact', 'thirdparty' => 'thirdparty',
-					'payment'    => 'payment', 'project' => 'project', 'bank' => 'bank',
-					'event'      => 'event',   'user'    => 'user',
+					'all'        => $langs->transnoentitiesnoconv('AllCategories'),
+					'invoice'    => $langs->transnoentitiesnoconv('PurgeCatInvoice'),
+					'order'      => $langs->transnoentitiesnoconv('PurgeCatOrder'),
+					'proposal'   => $langs->transnoentitiesnoconv('PurgeCatProposal'),
+					'product'    => $langs->transnoentitiesnoconv('PurgeCatProduct'),
+					'contact'    => $langs->transnoentitiesnoconv('PurgeCatContact'),
+					'thirdparty' => $langs->transnoentitiesnoconv('PurgeCatThirdparty'),
+					'payment'    => $langs->transnoentitiesnoconv('PurgeCatPayment'),
+					'project'    => $langs->transnoentitiesnoconv('PurgeCatProject'),
+					'bank'       => $langs->transnoentitiesnoconv('PurgeCatBank'),
+					'event'      => $langs->transnoentitiesnoconv('PurgeCatEvent'),
+					'user'       => $langs->transnoentitiesnoconv('PurgeCatUser'),
 				),
 				'default' => 'all',
 			),
-			array('name' => 'date', 'label' => $langs->trans('BeforeDate'), 'type' => 'text', 'default' => 'all', 'placeholder' => 'all  ou  2024-01-01'),
+			array('name' => 'date', 'label' => $langs->transnoentitiesnoconv('BeforeDate'), 'type' => 'text', 'default' => 'all', 'placeholder' => 'all  ou  2024-01-01'),
 		),
 	),
 	// ── Nouveaux scripts ──────────────────────────────────────────────────────
 	'generate-expedition' => array(
-		'label'   => 'Générer des Expéditions',
+		'label'   => $langs->transnoentitiesnoconv('GenerateShipments'),
 		'icon'    => 'shipment',
-		'hint'    => 'Crée des expéditions depuis les commandes client validées existantes.',
+		'hint'    => $langs->transnoentitiesnoconv('HintShipment'),
 		'danger'  => false,
 		'perm'    => 'generate',
-		'columns' => array('Réf.', 'Tiers', 'Date livraison'),
+		'columns' => array($langs->transnoentitiesnoconv('Ref'), $langs->transnoentitiesnoconv('ThirdParty'), $langs->transnoentitiesnoconv('DeliveryDate')),
 		'fields'  => array(
-			array('name' => 'nb', 'label' => $langs->trans('NumberToGenerate'), 'type' => 'number', 'default' => 5, 'min' => 1, 'max' => 500),
+			array('name' => 'nb', 'label' => $langs->transnoentitiesnoconv('NumberToGenerate'), 'type' => 'number', 'default' => 5, 'min' => 1, 'max' => 500),
 		),
 	),
 	'generate-supplier-order' => array(
-		'label'   => 'Générer des Commandes fournisseur',
+		'label'   => $langs->transnoentitiesnoconv('GenerateSupplierOrders'),
 		'icon'    => 'supplier_order',
-		'hint'    => 'Crée des commandes fournisseur validées avec des tiers fournisseurs et des produits aléatoires.',
+		'hint'    => $langs->transnoentitiesnoconv('HintSupplierOrder'),
 		'danger'  => false,
 		'perm'    => 'generate',
-		'columns' => array('Réf.', 'Date', 'Fournisseur', 'Montant HT'),
+		'columns' => array($langs->transnoentitiesnoconv('Ref'), $langs->transnoentitiesnoconv('Date'), $langs->transnoentitiesnoconv('Supplier'), $langs->transnoentitiesnoconv('AmountHT')),
 		'fields'  => array(
-			array('name' => 'nb', 'label' => $langs->trans('NumberToGenerate'), 'type' => 'number', 'default' => 10, 'min' => 1, 'max' => 2000),
+			array('name' => 'nb', 'label' => $langs->transnoentitiesnoconv('NumberToGenerate'), 'type' => 'number', 'default' => 10, 'min' => 1, 'max' => 2000),
 		),
 	),
 	'generate-reception' => array(
-		'label'   => 'Générer des Réceptions fournisseur',
+		'label'   => $langs->transnoentitiesnoconv('GenerateSupplierReceptions'),
 		'icon'    => 'reception',
-		'hint'    => 'Crée des réceptions depuis les commandes fournisseur validées existantes.',
+		'hint'    => $langs->transnoentitiesnoconv('HintSupplierReception'),
 		'danger'  => false,
 		'perm'    => 'generate',
-		'columns' => array('Réf.', 'Fournisseur', 'Date réception'),
+		'columns' => array($langs->transnoentitiesnoconv('Ref'), $langs->transnoentitiesnoconv('Supplier'), $langs->transnoentitiesnoconv('ColReceptionDate')),
 		'fields'  => array(
-			array('name' => 'nb', 'label' => $langs->trans('NumberToGenerate'), 'type' => 'number', 'default' => 5, 'min' => 1, 'max' => 500),
+			array('name' => 'nb', 'label' => $langs->transnoentitiesnoconv('NumberToGenerate'), 'type' => 'number', 'default' => 5, 'min' => 1, 'max' => 500),
 		),
 	),
 	'generate-supplier-invoice' => array(
-		'label'   => 'Générer des Factures fournisseur',
+		'label'   => $langs->transnoentitiesnoconv('GenerateSupplierInvoices'),
 		'icon'    => 'supplier_invoice',
-		'hint'    => 'Crée des factures fournisseur validées avec des tiers fournisseurs et des produits aléatoires.',
+		'hint'    => $langs->transnoentitiesnoconv('HintSupplierInvoice'),
 		'danger'  => false,
 		'perm'    => 'generate',
-		'columns' => array('Réf.', 'Date', 'Fournisseur', 'Montant HT', 'Montant TTC'),
+		'columns' => array($langs->transnoentitiesnoconv('Ref'), $langs->transnoentitiesnoconv('Date'), $langs->transnoentitiesnoconv('Supplier'), $langs->transnoentitiesnoconv('AmountHT'), $langs->transnoentitiesnoconv('AmountTTC')),
 		'fields'  => array(
-			array('name' => 'nb', 'label' => $langs->trans('NumberToGenerate'), 'type' => 'number', 'default' => 10, 'min' => 1, 'max' => 2000),
+			array('name' => 'nb', 'label' => $langs->transnoentitiesnoconv('NumberToGenerate'), 'type' => 'number', 'default' => 10, 'min' => 1, 'max' => 2000),
 		),
 	),
 );
@@ -1663,11 +1971,22 @@ foreach ($scriptLog as $entry) {
 
     // ── generate-order ──────────────────────────────────────────────────────
     } elseif ($activeScript === 'generate-order') {
-        // ✓ #N | REF | soc=SOCID | DATE | HT=X
-        if (preg_match('/\| (\S+) \| soc=(\d+) \| (\S+) \| HT=([\d.]+)/', $msg, $m)) {
+        // ✓ #N | REF | batch=XXX | nb=X | ship=X | soc=SOCID | DATE | HT=X
+        if (preg_match('/\| (\S+) \| batch=(\w+) \| nb=(\d+) \| ship=(\w+) \| soc=(\d+) \| (\S+) \| HT=([\d.]+)/', $msg, $m)) {
+            $batchTr = $m[2];
+            if ($batchTr === 'all') $batchTr = 'Tous';
+            elseif ($batchTr === 'Sans_lot') $batchTr = 'Sans lot/série';
+            elseif ($batchTr === 'lot') $batchTr = 'Lot';
+            elseif ($batchTr === 'serial') $batchTr = 'Série';
+
             $cells = array(
                 $makeLink('commande', $m[1], '/commande/card.php?id='),
-                $resolveSoc((int)$m[2]), $m[3], $m[4] . ' €',
+                $batchTr,
+                $m[3],
+                $m[4],
+                $resolveSoc((int)$m[5]), 
+                $m[6], 
+                $m[7] . ' €',
             );
         }
 
@@ -1867,19 +2186,19 @@ print dol_get_fiche_head($head, 'index', 'DoliStream', -1, 'technic');
 <?php foreach ($stats as $s): ?>
 	<div class="ds-stat-chip"><?php print $s['icon']; ?> <strong><?php print $s['count']; ?></strong> <?php print $s['label']; ?></div>
 <?php endforeach; ?>
-	<a href="<?php print $_SERVER['PHP_SELF']; ?>?script=<?php print urlencode($activeScript); ?>" style="margin-left:auto;font-size:0.82em;color:var(--colorbackhmenu1,rgb(90,50,120))">↺ <?php print $langs->trans('RefreshStats'); ?></a>
+	<a href="<?php print $_SERVER['PHP_SELF']; ?>?script=<?php print urlencode($activeScript); ?>" style="margin-left:auto;font-size:0.82em;color:var(--colorbackhmenu1,rgb(90,50,120))">↺ <?php print $langs->transnoentitiesnoconv('RefreshStats'); ?></a>
 </div>
 
 <?php if ($def): ?>
 
 <?php if ($def['danger']): ?>
-<div class="ds-danger-banner">⚠ <?php print $langs->trans('DangerPurge'); ?></div>
+<div class="ds-danger-banner">⚠ <?php print $langs->transnoentitiesnoconv('DangerPurge'); ?></div>
 <?php endif; ?>
 
 <div class="ds-hint">ℹ <?php print $def['hint']; ?></div>
 
 <!-- Formulaire 1 ligne -->
-<form method="POST" action="<?php print $_SERVER['PHP_SELF']; ?>" style="margin-top:12px;">
+<form id="ds-run-form" method="POST" action="<?php print $_SERVER['PHP_SELF']; ?>" style="margin-top:12px;">
 <input type="hidden" name="action" value="run">
 <input type="hidden" name="script" value="<?php print htmlspecialchars($activeScript); ?>">
 <input type="hidden" name="token" value="<?php print newToken(); ?>">
@@ -1889,7 +2208,7 @@ print dol_get_fiche_head($head, 'index', 'DoliStream', -1, 'technic');
   <label style="display:flex;align-items:center;gap:6px;white-space:nowrap;">
     <span style="font-weight:600;"><?php print $field['label']; ?> <span class="error">*</span></span>
     <?php if ($field['type'] === 'select'): ?>
-      <select name="<?php print $field['name']; ?>" class="flat">
+      <select name="<?php print $field['name']; ?>" id="ds-fld-<?php print $field['name']; ?>" class="flat">
       <?php
         $selectedVal = ($field['name'] === 'opt' && !empty($urlOpt)) ? $urlOpt : ($field['default'] ?? '');
         foreach ($field['options'] as $v => $l):
@@ -1897,8 +2216,10 @@ print dol_get_fiche_head($head, 'index', 'DoliStream', -1, 'technic');
         <option value="<?php print htmlspecialchars($v); ?>" <?php print ($selectedVal === $v ? 'selected' : ''); ?>><?php print htmlspecialchars($l); ?></option>
 <?php endforeach; ?>
       </select>
+    <?php elseif ($field['type'] === 'checkbox'): ?>
+      <input type="checkbox" name="<?php print $field['name']; ?>" id="ds-fld-<?php print $field['name']; ?>" value="1" <?php print (!empty($field['default']) ? 'checked' : ''); ?>>
     <?php elseif ($field['type'] === 'number'): ?>
-      <input type="number" name="<?php print $field['name']; ?>" class="flat" style="width:70px;"
+      <input type="number" name="<?php print $field['name']; ?>" id="ds-fld-<?php print $field['name']; ?>" class="flat" style="width:70px;"
         value="<?php print (int)($field['default'] ?? 10); ?>"
         min="<?php print $field['min'] ?? 1; ?>" max="<?php print $field['max'] ?? 100000; ?>" required>
     <?php else: ?>
@@ -1908,6 +2229,29 @@ print dol_get_fiche_head($head, 'index', 'DoliStream', -1, 'technic');
     <?php endif; ?>
   </label>
 <?php endforeach; ?>
+<?php if ($activeScript === 'generate-stock' || $activeScript === 'generate-product'): ?>
+<script>
+(function(){
+  var sel = document.getElementById('ds-fld-batch_mode');
+  var qty = document.getElementById('ds-fld-qty_max') || document.getElementById('ds-fld-stock_qty_max');
+  if (!sel || !qty) return;
+  function _update() {
+    var isSerial = sel.value === 'serial';
+    qty.disabled = isSerial;
+    qty.value    = isSerial ? 1 : (qty._saved || qty.value);
+    qty.style.background = isSerial ? '#e8e8e8' : '';
+    qty.style.color      = isSerial ? '#999' : '';
+    qty.title            = isSerial ? 'Quantité forcée à 1 (numéro de série unique par unité)' : '';
+    if (!isSerial && qty._saved) { qty.value = qty._saved; }
+  }
+  sel.addEventListener('change', function() {
+    if (sel.value !== 'serial') qty._saved = qty.value;
+    _update();
+  });
+  _update(); // init au chargement
+})();
+</script>
+<?php endif; ?>
   <!-- Ring + boutons sur la même ligne -->
   <div style="display:inline-flex;align-items:center;gap:8px;">
     <!-- Ring: visibility:hidden par défaut = réserve l'espace, 0 décalage -->
@@ -1917,12 +2261,12 @@ print dol_get_fiche_head($head, 'index', 'DoliStream', -1, 'technic');
       </div>
     </div>
     <?php if ($def['danger']): ?>
-      <button type="submit" class="butActionDelete"
-        onclick="return confirm('Continuer ?')">&#128163; <?php print $langs->trans('RunScript'); ?></button>
+      <button type="submit" id="ds-run-btn" class="butActionDelete"
+        onclick="return confirm('Continuer ?')"><?php print '&#128163; ' . $langs->transnoentitiesnoconv('RunScript'); ?></button>
     <?php else: ?>
-      <button type="submit" class="butAction">&#9654; <?php print $langs->trans('RunScript'); ?></button>
+      <button type="submit" id="ds-run-btn" class="butAction">&#9654; <?php print $langs->transnoentitiesnoconv('RunScript'); ?></button>
     <?php endif; ?>
-    <a href="?script=<?php print htmlspecialchars($activeScript); ?>" class="butActionRefused"><?php print $langs->trans('Cancel'); ?></a>
+    <a href="?script=<?php print htmlspecialchars($activeScript); ?>" class="butActionRefused"><?php print $langs->transnoentitiesnoconv('Cancel'); ?></a>
   </div>
 </div>
 </form>
@@ -1941,16 +2285,27 @@ $_warnCount = count(array_filter($scriptLog, fn($l) => $l['level'] === 'warn'));
 print_barre_liste(
 	'Éléments créés',
 	$page, $_SERVER['PHP_SELF'], 'script=' . urlencode($activeScript),
-	'', '',
-	'<span class="badge badge-status4 badge-status">' . $_okCount . ' OK</span>'
-	. ($_errCount  > 0 ? '&nbsp;<span class="badge badge-status8 badge-status">' . $_errCount . ' Erreur(s)</span>' : '')
-	. ($_warnCount > 0 ? '&nbsp;<span class="badge badge-status1 badge-status">' . $_warnCount . ' Avert.</span>' : ''),
-	count($dbResults), count($dbResults), '', 0, '', '', 25
+	'', '', '',
+	($dbNewCount > 0 ? $dbNewCount : count($dbResults)),
+	($dbNewCount > 0 ? $dbNewCount : count($dbResults)),
+	'', 0, '', '', 25
 );
+
 ?>
+<form method="POST" action="<?php print $_SERVER['PHP_SELF']; ?>" id="mass-action-form">
+<input type="hidden" name="token" value="<?php print newToken(); ?>">
+<input type="hidden" name="action" value="mass_action_ship_orders">
+<input type="hidden" name="script" value="<?php print htmlspecialchars($activeScript); ?>">
+<?php if ($activeScript === 'generate-order'): ?>
+<div style="margin-bottom: 10px;">
+    <button type="submit" class="butAction" name="mass_action_btn" value="validate_ship"><?php print $langs->transnoentities('ValidateAndShip'); ?></button>
+</div>
+<?php endif; ?>
 <table class="noborder centpercent">
 <thead>
 <tr class="liste_titre">
+  <th class="notopandbottom" style="width:20px"><input type="checkbox" class="flat checkall" id="checkall"></th>
+  <th style="width:40px">Id</th>
   <th>Réf.</th>
   <?php foreach ($dbHead as $_dh): ?><th><?php print htmlspecialchars($_dh); ?></th><?php endforeach; ?>
 </tr>
@@ -1963,6 +2318,8 @@ print_barre_liste(
 	$_dlink  = $dbUrl ? '<a href="' . DOL_URL_ROOT . $dbUrl . $_drowid . '">' . $_dref . '</a>' : $_dref;
 ?>
 <tr class="oddeven">
+  <td><input type="checkbox" class="flat checkforselect" name="toselect[]" value="<?php print $_drowid; ?>"></td>
+  <td style="color:#999;font-size:.85em"><?php print $_drowid; ?></td>
   <td><?php print $_dlink; ?></td>
   <?php for ($_di = 2; $_di < count($_dvals); $_di++): ?>
     <td><?php print htmlspecialchars((string)$_dvals[$_di]); ?></td>
@@ -1971,6 +2328,7 @@ print_barre_liste(
 <?php endforeach; ?>
 </tbody>
 </table>
+</form>
 
 <?php if ($acId > 0): ?>
 <div style="margin:8px 0 4px;font-size:0.85em;color:#555;">
@@ -1983,16 +2341,60 @@ print_barre_liste(
 <div class="info">Aucun élément retourné par la base (vérifiez les logs ci-dessous).</div>
 <?php endif; ?>
 
-<?php if (!empty($scriptLog)): ?>
+<?php
+// ── Console : charge dernier fichier log si pas de session courante ───────────
+$_dsLogSource = !empty($scriptLog) ? 'live' : 'file';
+$_dsLogLines  = array();  // {time, cls, msg}
+$_dsLogLabel  = 'Aucun log';
+$_dsAutoOpen  = false;
+
+if ($_dsLogSource === 'live') {
+	foreach ($scriptLog as $_cl) {
+		$_dsLogLines[] = array(
+			'time' => $_cl['time'] ?? date('H:i:s'),
+			'cls'  => 'ds-log-' . (($_cl['level'] ?? 'i')[0]),
+			'msg'  => $_cl['msg'],
+		);
+	}
+	$_okN   = count(array_filter($scriptLog, fn($l) => $l['level'] === 'success'));
+	$_errN  = count(array_filter($scriptLog, fn($l) => $l['level'] === 'error'));
+	$_dsLogLabel = htmlspecialchars($script) . ' &nbsp;| &nbsp;<span style="color:#3fb950">' . $_okN . ' OK</span>';
+	if ($_errN > 0) $_dsLogLabel .= ' &nbsp;| &nbsp;<span style="color:#f85149">' . $_errN . ' Err</span>';
+	$_dsAutoOpen = true;
+} else {
+	$_logDir = DOL_DATA_ROOT . '/dolistream/';
+	if (is_dir($_logDir)) {
+		$_files = glob($_logDir . 'dolistream-*.txt');
+		if (!empty($_files)) {
+			usort($_files, fn($a,$b) => filemtime($b) - filemtime($a));
+			$logFilePath = $_files[0];
+			$_rawLines = @file($_files[0], FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+			$_dsLogLabel = 'Dernier : <span style="color:#8b949e">' . htmlspecialchars(basename($_files[0])) . '</span>';
+			if ($_rawLines) {
+				foreach ($_rawLines as $_rl) {
+					// Parse: HH:MM:SS [OK]/[ERR]/[WRN] message
+					if (preg_match('/^(\d{2}:\d{2}:\d{2}) \[(OK|ERR|WRN)\]\s*(.*)$/', $_rl, $_m)) {
+						$_clsMap = array('OK' => 'ds-log-s', 'ERR' => 'ds-log-e', 'WRN' => 'ds-log-w');
+						$_dsLogLines[] = array('time' => $_m[1], 'cls' => ($_clsMap[$_m[2]] ?? 'ds-log-i'), 'msg' => $_m[3]);
+					} elseif (preg_match('/^(Script|Param|Date)\s+: /i', $_rl)) {
+						$_dsLogLines[] = array('time' => '     ', 'cls' => 'ds-log-i', 'msg' => $_rl);
+					}
+				}
+			}
+		}
+	}
+}
+?>
 <style>
-.ds-console-popup{position:fixed;bottom:0;right:24px;width:620px;max-width:calc(100vw - 48px);background:#0d1117;border:1px solid #30363d;border-bottom:none;border-radius:8px 8px 0 0;font-family:'Consolas','Courier New',monospace;z-index:9999;box-shadow:0 -4px 20px rgba(0,0,0,.5);}
+.ds-console-popup{position:fixed;bottom:0;right:24px;width:660px;max-width:calc(100vw - 48px);background:#0d1117;border:1px solid #30363d;border-bottom:none;border-radius:8px 8px 0 0;font-family:'Consolas','Courier New',monospace;z-index:9999;box-shadow:0 -4px 20px rgba(0,0,0,.5);}
 .ds-con-hd{display:flex;align-items:center;justify-content:space-between;padding:7px 14px;background:#161b22;border-bottom:1px solid #30363d;border-radius:8px 8px 0 0;cursor:pointer;user-select:none;}
-.ds-con-title{color:#58a6ff;font-weight:700;font-size:.82em;letter-spacing:.5px;}
-.ds-con-acts{display:flex;gap:10px;align-items:center;font-size:.76em;color:#8b949e;}
+.ds-con-title{color:#58a6ff;font-weight:700;font-size:.82em;letter-spacing:.5px;white-space:nowrap;}
+.ds-con-sub{color:#6e7681;font-size:.76em;margin-left:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ds-con-acts{display:flex;gap:10px;align-items:center;font-size:.76em;color:#8b949e;flex-shrink:0;}
 .ds-con-acts button{background:none;border:none;color:#8b949e;cursor:pointer;padding:0;font-family:inherit;font-size:1em;}
 .ds-con-acts button:hover{color:#c9d1d9;}
 .ds-con-sep{color:#30363d;}
-.ds-con-body{height:250px;overflow-y:auto;padding:8px 14px;scroll-behavior:smooth;}
+.ds-con-body{height:260px;overflow-y:auto;padding:8px 14px;scroll-behavior:smooth;}
 .ds-log-line{display:flex;gap:8px;margin-bottom:2px;font-size:.76em;line-height:1.5;}
 .ds-log-time{color:#484f58;min-width:56px;flex-shrink:0;}
 .ds-log-pfx{color:#58a6ff;flex-shrink:0;}
@@ -2000,43 +2402,43 @@ print_barre_liste(
 </style>
 <div class="ds-console-popup" id="ds-cp">
   <div class="ds-con-hd" onclick="dsToggle()">
-    <span class="ds-con-title">&gt;_ CONSOLE</span>
+    <span style="display:flex;align-items:center;min-width:0;overflow:hidden;">
+      <span class="ds-con-title">&gt;_ CONSOLE</span>
+      <span class="ds-con-sub"><?php print $_dsLogLabel; ?></span>
+    </span>
     <span class="ds-con-acts" onclick="event.stopPropagation()">
       <?php if (!empty($logFilePath)): ?>
-      <button onclick="window.open('<?php print DOL_URL_ROOT; ?>/dolistream/view/download_log.php?f=<?php print urlencode(basename($logFilePath)); ?>','_blank')" title="Telechargement log">&#11015; Log</button>
+      <button onclick="window.open('<?php print DOL_URL_ROOT; ?>/dolistream/view/download_log.php?f=<?php print urlencode(basename($logFilePath)); ?>','_blank')" title="Telecharger">&#11015;</button>
       <span class="ds-con-sep">|</span>
       <?php endif; ?>
       <button onclick="dsCopy()">Copier</button><span class="ds-con-sep">|</span>
       <button onclick="dsClear()">Vider</button><span class="ds-con-sep">|</span>
-      <button id="ds-arr" onclick="dsToggle()">&#9660;</button>
+      <button id="ds-arr" onclick="dsToggle()" title="Ouvrir / Fermer">&#9650;</button>
     </span>
   </div>
-  <div class="ds-con-body" id="ds-cb">
-  <?php foreach ($scriptLog as $_cl): ?>
-  <?php
-    $_cls = 'ds-log-' . (($_cl['level'] ?? 'i')[0]);
-    $_t   = htmlspecialchars($_cl['time'] ?? date('H:i:s'));
-  ?>
+  <div class="ds-con-body" id="ds-cb" style="display:none">
+  <?php foreach ($_dsLogLines as $_cl): ?>
     <div class="ds-log-line">
-      <span class="ds-log-time"><?php print $_t; ?></span>
+      <span class="ds-log-time"><?php print htmlspecialchars($_cl['time']); ?></span>
       <span class="ds-log-pfx">&gt;_</span>
-      <span class="<?php print $_cls; ?>"><?php print htmlspecialchars($_cl['msg']); ?></span>
+      <span class="<?php print $_cl['cls']; ?>"><?php print htmlspecialchars($_cl['msg']); ?></span>
     </div>
   <?php endforeach; ?>
   </div>
 </div>
 <script>
-var _dsClosed=false;
-function dsToggle(){var b=document.getElementById('ds-cb'),a=document.getElementById('ds-arr');_dsClosed=!_dsClosed;b.style.display=_dsClosed?'none':'';a.textContent=_dsClosed?'▲':'▼';}
+var _dsClosed=true;
+function dsToggle(){var b=document.getElementById('ds-cb'),a=document.getElementById('ds-arr');_dsClosed=!_dsClosed;b.style.display=_dsClosed?'none':'block';a.textContent=_dsClosed?'▲':'▼';}
 function dsClear(){document.getElementById('ds-cb').innerHTML='';}
 function dsCopy(){
   var lines=document.querySelectorAll('#ds-cb .ds-log-line'),txt='';
-  lines.forEach(function(l){var t=l.querySelector('.ds-log-time');var m=l.querySelector('[class^=ds-log-s],[class^=ds-log-e],[class^=ds-log-w],[class^=ds-log-i]');txt+=(t?t.textContent:'')+' >_ '+(m?m.textContent:'')+"\n";});
+  lines.forEach(function(l){var t=l.querySelector('.ds-log-time');var m=l.querySelector('[class^=ds-log-]');txt+=(t?t.textContent:'')+' >_ '+(m?m.textContent:'')+"\n";});
   if(navigator.clipboard){navigator.clipboard.writeText(txt).then(function(){var b=event.target;b.textContent='✓';setTimeout(function(){b.textContent='Copier';},2000);});}
 }
-(function(){var b=document.getElementById('ds-cb');if(b)b.scrollTop=b.scrollHeight;})();
-</script>
+<?php if ($_dsAutoOpen): ?>
+(function(){dsToggle();var b=document.getElementById('ds-cb');if(b)setTimeout(function(){b.scrollTop=b.scrollHeight;},50);})();
 <?php endif; ?>
+</script>
 
 
 
@@ -2050,20 +2452,155 @@ function dsCopy(){
 (function () {
   var ring   = document.getElementById('ds-ring');
   var circle = document.getElementById('ds-ring-circle');
-  if (!ring || !circle) return;
+  var form   = document.getElementById('ds-run-form');
+  if (!ring || !circle || !form) return;
 
-  document.addEventListener('submit', function (e) {
-    var form = e.target;
-    if (!form) return;
+  // URL de l'endpoint AJAX (sans mainmenu/idmenu Dolibarr)
+  var _ajaxUrl = '<?php echo DOL_URL_ROOT . "/custom/dolistream/ajax/run.php"; ?>';
+  // URL de polling des logs
+  var _pollBase = '<?php echo dol_escape_js($_SERVER["PHP_SELF"]); ?>?action=poll_log';
+
+  var _pollTimer    = null;
+  var _pollCount    = 0;
+  var _prevMaxRowid = 0;
+  var _abortCtrl    = null;
+  var runBtn = document.getElementById('ds-run-btn');
+
+  // Transform button to STOP (or back to EXÉCUTER)
+  function _setRunning(yes) {
+    if (!runBtn) return;
+    if (yes) {
+      runBtn.setAttribute('data-ot', runBtn.textContent);
+      runBtn.setAttribute('data-oc', runBtn.className);
+      runBtn.textContent = '\u25a0 ARR\u00caTER';
+      runBtn.className   = 'butActionDelete';
+      runBtn.type        = 'button';
+      runBtn.onclick     = function () {
+        if (_abortCtrl) _abortCtrl.abort();
+      };
+    } else {
+      runBtn.textContent = runBtn.getAttribute('data-ot') || '\u25b6 EX\u00c9CUTER';
+      runBtn.className   = runBtn.getAttribute('data-oc') || 'butAction';
+      runBtn.type        = 'submit';
+      runBtn.onclick     = null;
+    }
+  }
+
+  function _reset(msg) {
+    _stopPoll();
+    ring.style.visibility           = 'hidden';
+    circle.style.animationPlayState = 'paused';
+    _setRunning(false);
+    _abortCtrl = null;
+    if (msg) _appendLog({ level: 'warn', time: new Date().toTimeString().slice(0,8), msg: msg });
+  }
+
+  // ── Helpers d'affichage console ─────────────────────────────────────────────
+  function _levelClass(lv) {
+    if (lv === 'success') return 'ds-log-s';
+    if (lv === 'error')   return 'ds-log-e';
+    if (lv === 'warn')    return 'ds-log-w';
+    return 'ds-log-i';
+  }
+
+  function _appendLog(entry) {
+    var body = document.getElementById('ds-cb');
+    if (!body) return;
+    var line = document.createElement('div');
+    line.className = 'ds-log-line';
+    line.innerHTML = '<span class="ds-log-time">' + (entry.time || '') + '</span> '
+      + '<span class="' + _levelClass(entry.level) + '">'
+      + String(entry.msg || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      + '</span>';
+    body.appendChild(line);
+    body.scrollTop = body.scrollHeight;
+    var hd = document.querySelector('.ds-con-hd .ds-con-last');
+    if (hd) hd.textContent = entry.msg;
+  }
+
+  function _ensureConsoleOpen() {
+    var b   = document.getElementById('ds-cb');
+    var arr = document.getElementById('ds-arr');
+    if (!b) return;
+    b.style.display = 'block';
+    if (arr) arr.textContent = '▼';
+    b.innerHTML = ''; // vide avant nouvelle exécution
+  }
+
+  // ── Polling du fichier live ──────────────────────────────────────────────────
+  function _startPoll(scriptName) {
+    _pollCount = 0;
+    var url = _pollBase + '&script=' + encodeURIComponent(scriptName);
+    _pollTimer = setInterval(function () {
+      fetch(url + '&since=' + _pollCount, { credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (data) {
+          if (!data) return;
+          data.lines.forEach(function (raw) {
+            try { _appendLog(JSON.parse(raw)); } catch (e) {}
+          });
+          _pollCount = data.total;
+        })
+        .catch(function () {});
+    }, 300);
+  }
+
+  function _stopPoll() {
+    if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
+  }
+
+  // ── Soumission AJAX ──────────────────────────────────────────────────────────
+  form.addEventListener('submit', function (e) {
     var nbInput = form.querySelector('[name="nb"]');
     var nb = nbInput ? parseInt(nbInput.value, 10) : Infinity;
-    if (nb < 1) return; // nb=Infinity si pas de champ nb (purge-data) => toujours visible
-    // Affiche le spinner CSS (tourne tout seul grâce à @keyframes)
-    ring.style.visibility = 'visible';
+    if (nb < 1) return;
+
+    e.preventDefault();
+
+    // Crée un AbortController pour permettre l'arrêt
+    _abortCtrl = new AbortController();
+
+    // Spinner + bouton STOP + console
+    ring.style.visibility           = 'visible';
     circle.style.animationPlayState = 'running';
+    _setRunning(true);
+    _ensureConsoleOpen();
+
+    var scriptInput = form.querySelector('[name="script"]');
+    var scriptName  = scriptInput ? scriptInput.value : '';
+    _startPoll(scriptName);
+
+    // POST vers l'endpoint dédié
+    var fd = new FormData(form);
+    fetch(_ajaxUrl, { method: 'POST', body: fd, credentials: 'same-origin', signal: _abortCtrl.signal })
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(function (data) {
+        _prevMaxRowid = (data && data.prev_max_rowid) ? data.prev_max_rowid : 0;
+
+        return new Promise(function (resolve) { setTimeout(resolve, 600); });
+      })
+      .then(function () {
+        _reset();
+        var _url = window.location.href.replace(/([?&])ds_prev=\d+/, '');
+        _url += (_url.indexOf('?') >= 0 ? '&' : '?') + 'ds_prev=' + _prevMaxRowid;
+        window.location.href = _url;
+      })
+      .catch(function (err) {
+        if (err.name === 'AbortError') {
+          _reset('Exécution interrompue par l\'utilisateur.');
+          return;
+        }
+        _reset();
+        console.error('[DoliStream] AJAX error:', err);
+        window.location.reload();
+      });
   });
 })();
 </script>
+
 
 <?php
 llxFooter();
