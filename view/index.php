@@ -100,7 +100,7 @@ $scriptLog = array();
 function dsLog(string $msg, string $level = 'info'): void
 {
 	global $scriptLog;
-	$scriptLog[] = array('level' => $level, 'msg' => $msg);
+	$scriptLog[] = array('level' => $level, 'msg' => $msg, 'time' => date('H:i:s'));
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1280,6 +1280,22 @@ if ($action === 'run' && isset($dsDbConf[$script])) {
 	}
 	$consoleText .= $_sep . "\n" . count($dbResults) . ' element(s) cree(s)' . "\n";
 
+	// ── Log raw (avec timestamps) ajoute a la fin du consoleText ───────────────
+	$consoleText .= "\n--- Log d execution ---\n";
+	foreach ($scriptLog as $_le) {
+		$_lic = $_le['level'] === 'success' ? '[OK]' : ($_le['level'] === 'error' ? '[ERR]' : '[WRN]');
+		$consoleText .= ($_le['time'] ?? date('H:i:s')) . ' ' . $_lic . ' ' . $_le['msg'] . "\n";
+	}
+
+	// ── Sauvegarde du log dans documents/dolistream/ ─────────────────────────
+	$_logDir = DOL_DATA_ROOT . '/dolistream/';
+	if (!is_dir($_logDir)) {
+		dol_mkdir($_logDir);
+	}
+	$logFilePath = $_logDir . 'dolistream-' . preg_replace('/[^a-z0-9-]/', '', $script)
+		. '-' . date('Ymd-His') . '.txt';
+	file_put_contents($logFilePath, $consoleText);
+
 	// ActionComm
 	if (!empty($dbResults)) {
 		$_noteHtml  = '<pre style="font-family:monospace;font-size:12px;background:#1e1e1e;color:#d4d4d4;padding:12px;border-radius:4px;">';
@@ -1295,6 +1311,7 @@ if ($action === 'run' && isset($dsDbConf[$script])) {
 	}
 }
 
+$logFilePath = '';
 render:
 
 // ── Stats base de données ────────────────────────────────────────────────────
@@ -1987,43 +2004,59 @@ print_barre_liste(
 <div class="info">Aucun élément retourné par la base (vérifiez les logs ci-dessous).</div>
 <?php endif; ?>
 
-<?php if (!empty($consoleText) || !empty($scriptLog)): ?>
-<div style="margin-top:18px;">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-    <span style="font-weight:600;font-size:0.88em;color:#444;">📋 Console log</span>
-    <button type="button" id="ds-copy-btn" onclick="dsConsoleCopy()" style="font-size:0.8em;padding:3px 12px;cursor:pointer;border:1px solid #aaa;border-radius:3px;background:#f7f7f7;">
-      📋 Copier
-    </button>
+<?php if (!empty($scriptLog)): ?>
+<style>
+.ds-console-popup{position:fixed;bottom:0;right:24px;width:620px;max-width:calc(100vw - 48px);background:#0d1117;border:1px solid #30363d;border-bottom:none;border-radius:8px 8px 0 0;font-family:'Consolas','Courier New',monospace;z-index:9999;box-shadow:0 -4px 20px rgba(0,0,0,.5);}
+.ds-con-hd{display:flex;align-items:center;justify-content:space-between;padding:7px 14px;background:#161b22;border-bottom:1px solid #30363d;border-radius:8px 8px 0 0;cursor:pointer;user-select:none;}
+.ds-con-title{color:#58a6ff;font-weight:700;font-size:.82em;letter-spacing:.5px;}
+.ds-con-acts{display:flex;gap:10px;align-items:center;font-size:.76em;color:#8b949e;}
+.ds-con-acts button{background:none;border:none;color:#8b949e;cursor:pointer;padding:0;font-family:inherit;font-size:1em;}
+.ds-con-acts button:hover{color:#c9d1d9;}
+.ds-con-sep{color:#30363d;}
+.ds-con-body{height:250px;overflow-y:auto;padding:8px 14px;scroll-behavior:smooth;}
+.ds-log-line{display:flex;gap:8px;margin-bottom:2px;font-size:.76em;line-height:1.5;}
+.ds-log-time{color:#484f58;min-width:56px;flex-shrink:0;}
+.ds-log-pfx{color:#58a6ff;flex-shrink:0;}
+.ds-log-s{color:#3fb950;}.ds-log-e{color:#f85149;}.ds-log-w{color:#d29922;}.ds-log-i{color:#c9d1d9;}
+</style>
+<div class="ds-console-popup" id="ds-cp">
+  <div class="ds-con-hd" onclick="dsToggle()">
+    <span class="ds-con-title">&gt;_ CONSOLE</span>
+    <span class="ds-con-acts" onclick="event.stopPropagation()">
+      <?php if (!empty($logFilePath)): ?>
+      <button onclick="window.open('<?php print DOL_URL_ROOT; ?>/dolistream/view/download_log.php?f=<?php print urlencode(basename($logFilePath)); ?>','_blank')" title="Telechargement log">&#11015; Log</button>
+      <span class="ds-con-sep">|</span>
+      <?php endif; ?>
+      <button onclick="dsCopy()">Copier</button><span class="ds-con-sep">|</span>
+      <button onclick="dsClear()">Vider</button><span class="ds-con-sep">|</span>
+      <button id="ds-arr" onclick="dsToggle()">&#9660;</button>
+    </span>
   </div>
-  <pre id="ds-console-output" style="background:#1e1e1e;color:#d4d4d4;font-family:'Consolas','Courier New',monospace;font-size:0.78em;line-height:1.5;padding:14px 16px;border-radius:6px;overflow:auto;max-height:420px;margin:0;border:1px solid #333;"><?php
-// 1) Résumé DB tabulé
-if (!empty($consoleText)) print htmlspecialchars($consoleText) . "\n";
-// 2) Log d'exécution complet (warnings + erreurs + succès)
-foreach ($scriptLog as $_le) {
-	$_icon = $_le['level'] === 'success' ? '✓' : ($_le['level'] === 'error' ? '✗' : '⚠');
-	print htmlspecialchars($_icon . ' ' . $_le['msg']) . "\n";
-}
-?></pre>
-  <script>
-  function dsConsoleCopy() {
-      var t   = document.getElementById('ds-console-output').textContent;
-      var btn = document.getElementById('ds-copy-btn');
-      if (navigator.clipboard) {
-          navigator.clipboard.writeText(t).then(function() {
-              btn.textContent = '✓ Copié !';
-              setTimeout(function(){ btn.textContent = '📋 Copier'; }, 2200);
-          });
-      } else {
-          // Fallback
-          var ta = document.createElement('textarea');
-          ta.value = t; document.body.appendChild(ta); ta.select();
-          document.execCommand('copy'); document.body.removeChild(ta);
-          btn.textContent = '✓ Copié !';
-          setTimeout(function(){ btn.textContent = '📋 Copier'; }, 2200);
-      }
-  }
-  </script>
+  <div class="ds-con-body" id="ds-cb">
+  <?php foreach ($scriptLog as $_cl): ?>
+  <?php
+    $_cls = 'ds-log-' . (($_cl['level'] ?? 'i')[0]);
+    $_t   = htmlspecialchars($_cl['time'] ?? date('H:i:s'));
+  ?>
+    <div class="ds-log-line">
+      <span class="ds-log-time"><?php print $_t; ?></span>
+      <span class="ds-log-pfx">&gt;_</span>
+      <span class="<?php print $_cls; ?>"><?php print htmlspecialchars($_cl['msg']); ?></span>
+    </div>
+  <?php endforeach; ?>
+  </div>
 </div>
+<script>
+var _dsClosed=false;
+function dsToggle(){var b=document.getElementById('ds-cb'),a=document.getElementById('ds-arr');_dsClosed=!_dsClosed;b.style.display=_dsClosed?'none':'';a.textContent=_dsClosed?'▲':'▼';}
+function dsClear(){document.getElementById('ds-cb').innerHTML='';}
+function dsCopy(){
+  var lines=document.querySelectorAll('#ds-cb .ds-log-line'),txt='';
+  lines.forEach(function(l){var t=l.querySelector('.ds-log-time');var m=l.querySelector('[class^=ds-log-s],[class^=ds-log-e],[class^=ds-log-w],[class^=ds-log-i]');txt+=(t?t.textContent:'')+' >_ '+(m?m.textContent:'')+"\n";});
+  if(navigator.clipboard){navigator.clipboard.writeText(txt).then(function(){var b=event.target;b.textContent='✓';setTimeout(function(){b.textContent='Copier';},2000);});}
+}
+(function(){var b=document.getElementById('ds-cb');if(b)b.scrollTop=b.scrollHeight;})();
+</script>
 <?php endif; ?>
 
 <?php else: ?>
