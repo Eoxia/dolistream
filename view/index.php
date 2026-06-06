@@ -109,77 +109,78 @@ function dsLog(string $msg, string $level = 'info'): void
 $dsDbConf = array(
 	'generate-thirdparty' => array(
 		'table'  => 'societe',
-		'head'   => array('Nom / Raison sociale', 'Type', 'Code client', 'Code fourn.'),
-		'select' => "SELECT s.rowid, s.nom, IF(s.client IN(1,2),'Client',IF(s.fournisseur=1,'Fournisseur','Autre')) AS type, IFNULL(s.code_client,'—') AS cc, IFNULL(s.code_fournisseur,'—') AS cf FROM " . MAIN_DB_PREFIX . "societe s WHERE s.rowid > {MAX} ORDER BY s.rowid ASC LIMIT {NB}",
+		'head'   => array('Nom / Raison sociale', 'Type', 'Code client', 'Cree le'),
+		'select' => "SELECT s.rowid, s.nom, IF(s.client IN(1,2),'Client',IF(s.fournisseur=1,'Fournisseur','Autre')) AS type, IFNULL(s.code_client,'—') AS cc, DATE_FORMAT(s.datec,'%d/%m/%Y %H:%i') AS cree_le FROM " . MAIN_DB_PREFIX . "societe s ORDER BY s.rowid DESC LIMIT {NB}",
 		'url'    => '/societe/card.php?socid=',
 	),
 	'generate-product' => array(
 		'table'  => 'product',
-		'head'   => array('Libellé', 'Prix HT', 'Type'),
-		'select' => "SELECT p.rowid, p.ref, p.label, CONCAT(ROUND(p.price,2),' €') AS prix, IF(p.fk_product_type=0,'Produit','Service') AS type FROM " . MAIN_DB_PREFIX . "product p WHERE p.rowid > {MAX} ORDER BY p.rowid ASC LIMIT {NB}",
+		'head'   => array('Libelle', 'Prix HT', 'Stock', 'Etat', 'Cree le'),
+		'select' => "SELECT p.rowid, p.ref, p.label, CONCAT(ROUND(p.price,2),' €') AS prix, CAST(IFNULL(ROUND(SUM(ps.reel),0),0) AS SIGNED) AS stock, IF(p.tosell=1,'En vente','Hors vente') AS statut, DATE_FORMAT(p.datec,'%d/%m/%Y %H:%i') AS cree_le FROM " . MAIN_DB_PREFIX . "product p LEFT JOIN " . MAIN_DB_PREFIX . "product_stock ps ON ps.fk_product=p.rowid GROUP BY p.rowid ORDER BY p.rowid DESC LIMIT {NB}",
 		'url'    => '/product/card.php?id=',
 	),
 	'generate-invoice' => array(
 		'table'  => 'facture',
-		'head'   => array('Tiers', 'Date', 'Montant HT', 'Montant TTC'),
-		'select' => "SELECT f.rowid, f.ref, s.nom AS tiers, DATE_FORMAT(f.datef,'%d/%m/%Y') AS date, CONCAT(ROUND(f.total_ht,2),' €') AS ht, CONCAT(ROUND(f.total_ttc,2),' €') AS ttc FROM " . MAIN_DB_PREFIX . "facture f LEFT JOIN " . MAIN_DB_PREFIX . "societe s ON s.rowid=f.fk_soc WHERE f.rowid > {MAX} ORDER BY f.rowid ASC LIMIT {NB}",
+		'head'   => array('Tiers', 'Date', 'Montant TTC', 'Etat', 'Cree le'),
+		'select' => "SELECT f.rowid, f.ref, s.nom AS tiers, DATE_FORMAT(f.datef,'%d/%m/%Y') AS date_f, CONCAT(ROUND(f.total_ttc,2),' €') AS ttc, IF(f.paye=1,'Payee',IF(f.fk_statut=1,'Ouverte','Brouillon')) AS statut, DATE_FORMAT(f.datec,'%d/%m/%Y %H:%i') AS cree_le FROM " . MAIN_DB_PREFIX . "facture f LEFT JOIN " . MAIN_DB_PREFIX . "societe s ON s.rowid=f.fk_soc ORDER BY f.rowid DESC LIMIT {NB}",
 		'url'    => '/compta/facture/card.php?id=',
 	),
 	'generate-order' => array(
 		'table'  => 'commande',
-		'head'   => array('Tiers', 'Date', 'Montant HT'),
-		'select' => "SELECT c.rowid, c.ref, s.nom AS tiers, DATE_FORMAT(c.date_commande,'%d/%m/%Y') AS date, CONCAT(ROUND(c.total_ht,2),' €') AS ht FROM " . MAIN_DB_PREFIX . "commande c LEFT JOIN " . MAIN_DB_PREFIX . "societe s ON s.rowid=c.fk_soc WHERE c.rowid > {MAX} ORDER BY c.rowid ASC LIMIT {NB}",
+		'head'   => array('Tiers', 'Date', 'Montant HT', 'Etat', 'Cree le'),
+		'select' => "SELECT c.rowid, c.ref, s.nom AS tiers, DATE_FORMAT(c.date_commande,'%d/%m/%Y') AS date_c, CONCAT(ROUND(c.total_ht,2),' €') AS ht, IF(c.fk_statut=1,'Brouillon',IF(c.fk_statut=2,'Validee','Livree')) AS statut, DATE_FORMAT(c.datec,'%d/%m/%Y %H:%i') AS cree_le FROM " . MAIN_DB_PREFIX . "commande c LEFT JOIN " . MAIN_DB_PREFIX . "societe s ON s.rowid=c.fk_soc ORDER BY c.rowid DESC LIMIT {NB}",
 		'url'    => '/commande/card.php?id=',
 	),
 	'generate-proposal' => array(
 		'table'  => 'propal',
-		'head'   => array('Tiers', 'Date', 'Montant HT'),
-		'select' => "SELECT p.rowid, p.ref, s.nom AS tiers, DATE_FORMAT(p.date,'%d/%m/%Y') AS date, CONCAT(ROUND(p.total_ht,2),' €') AS ht FROM " . MAIN_DB_PREFIX . "propal p LEFT JOIN " . MAIN_DB_PREFIX . "societe s ON s.rowid=p.fk_soc WHERE p.rowid > {MAX} ORDER BY p.rowid ASC LIMIT {NB}",
+		'head'   => array('Tiers', 'Date', 'Montant HT', 'Etat', 'Cree le'),
+		'select' => "SELECT p.rowid, p.ref, s.nom AS tiers, DATE_FORMAT(p.date,'%d/%m/%Y') AS date_p, CONCAT(ROUND(p.total_ht,2),' €') AS ht, IF(p.fk_statut=0,'Brouillon',IF(p.fk_statut=1,'Ouverte',IF(p.fk_statut=2,'Signee','Clot.'))) AS statut, DATE_FORMAT(p.datec,'%d/%m/%Y %H:%i') AS cree_le FROM " . MAIN_DB_PREFIX . "propal p LEFT JOIN " . MAIN_DB_PREFIX . "societe s ON s.rowid=p.fk_soc ORDER BY p.rowid DESC LIMIT {NB}",
 		'url'    => '/comm/propal/card.php?id=',
 	),
 	'generate-project' => array(
 		'table'  => 'projet',
-		'head'   => array('Titre', 'Montant opp.', 'Budget'),
-		'select' => "SELECT p.rowid, p.ref, p.title, CONCAT(FORMAT(IFNULL(p.opp_amount,0),0),' €') AS opp, CONCAT(FORMAT(IFNULL(p.budget_amount,0),0),' €') AS budget FROM " . MAIN_DB_PREFIX . "projet p WHERE p.rowid > {MAX} ORDER BY p.rowid ASC LIMIT {NB}",
+		'head'   => array('Titre', 'Montant opp.', 'Budget', 'Cree le'),
+		'select' => "SELECT p.rowid, p.ref, p.title, CONCAT(FORMAT(IFNULL(p.opp_amount,0),0),' €') AS opp, CONCAT(FORMAT(IFNULL(p.budget_amount,0),0),' €') AS budget, DATE_FORMAT(p.datec,'%d/%m/%Y %H:%i') AS cree_le FROM " . MAIN_DB_PREFIX . "projet p ORDER BY p.rowid DESC LIMIT {NB}",
 		'url'    => '/projet/card.php?id=',
 	),
 	'generate-expedition' => array(
 		'table'  => 'expedition',
-		'head'   => array('Tiers', 'Date livraison'),
-		'select' => "SELECT e.rowid, e.ref, s.nom AS tiers, IFNULL(DATE_FORMAT(e.date_delivery,'%d/%m/%Y'),'—') AS date_liv FROM " . MAIN_DB_PREFIX . "expedition e LEFT JOIN " . MAIN_DB_PREFIX . "societe s ON s.rowid=e.fk_soc WHERE e.rowid > {MAX} ORDER BY e.rowid ASC LIMIT {NB}",
+		'head'   => array('Tiers', 'Date livraison', 'Etat', 'Cree le'),
+		'select' => "SELECT e.rowid, e.ref, s.nom AS tiers, IFNULL(DATE_FORMAT(e.date_delivery,'%d/%m/%Y'),'—') AS date_liv, IF(e.fk_statut=0,'Brouillon',IF(e.fk_statut=1,'Validee','Livree')) AS statut, DATE_FORMAT(e.datec,'%d/%m/%Y %H:%i') AS cree_le FROM " . MAIN_DB_PREFIX . "expedition e LEFT JOIN " . MAIN_DB_PREFIX . "societe s ON s.rowid=e.fk_soc ORDER BY e.rowid DESC LIMIT {NB}",
 		'url'    => '/expedition/card.php?id=',
 	),
 	'generate-supplier-order' => array(
 		'table'  => 'commande_fournisseur',
-		'head'   => array('Fournisseur', 'Date', 'Montant HT'),
-		'select' => "SELECT c.rowid, c.ref, s.nom AS fourn, DATE_FORMAT(c.date_commande,'%d/%m/%Y') AS date, CONCAT(ROUND(c.total_ht,2),' €') AS ht FROM " . MAIN_DB_PREFIX . "commande_fournisseur c LEFT JOIN " . MAIN_DB_PREFIX . "societe s ON s.rowid=c.fk_soc WHERE c.rowid > {MAX} ORDER BY c.rowid ASC LIMIT {NB}",
+		'head'   => array('Fournisseur', 'Date', 'Montant HT', 'Etat', 'Cree le'),
+		'select' => "SELECT c.rowid, c.ref, s.nom AS fourn, DATE_FORMAT(c.date_commande,'%d/%m/%Y') AS date_c, CONCAT(ROUND(c.total_ht,2),' €') AS ht, IF(c.fk_statut=3,'Validee',IF(c.fk_statut=5,'Livree','Autre')) AS statut, DATE_FORMAT(c.datec,'%d/%m/%Y %H:%i') AS cree_le FROM " . MAIN_DB_PREFIX . "commande_fournisseur c LEFT JOIN " . MAIN_DB_PREFIX . "societe s ON s.rowid=c.fk_soc ORDER BY c.rowid DESC LIMIT {NB}",
 		'url'    => '/fourn/commande/card.php?id=',
 	),
 	'generate-reception' => array(
 		'table'  => 'reception',
-		'head'   => array('Fournisseur', 'Date réception'),
-		'select' => "SELECT r.rowid, r.ref, s.nom AS fourn, IFNULL(DATE_FORMAT(r.date_reception,'%d/%m/%Y'),'—') AS date_rec FROM " . MAIN_DB_PREFIX . "reception r LEFT JOIN " . MAIN_DB_PREFIX . "societe s ON s.rowid=r.fk_soc WHERE r.rowid > {MAX} ORDER BY r.rowid ASC LIMIT {NB}",
+		'head'   => array('Fournisseur', 'Date reception', 'Etat', 'Cree le'),
+		'select' => "SELECT r.rowid, r.ref, s.nom AS fourn, IFNULL(DATE_FORMAT(r.date_reception,'%d/%m/%Y'),'—') AS date_rec, IF(r.fk_statut=0,'Brouillon','Validee') AS statut, DATE_FORMAT(r.datec,'%d/%m/%Y %H:%i') AS cree_le FROM " . MAIN_DB_PREFIX . "reception r LEFT JOIN " . MAIN_DB_PREFIX . "societe s ON s.rowid=r.fk_soc ORDER BY r.rowid DESC LIMIT {NB}",
 		'url'    => '/reception/card.php?id=',
 	),
 	'generate-supplier-invoice' => array(
 		'table'  => 'facture_fourn',
-		'head'   => array('Fournisseur', 'Date', 'Montant HT', 'Montant TTC'),
-		'select' => "SELECT f.rowid, f.ref, s.nom AS fourn, DATE_FORMAT(f.datef,'%d/%m/%Y') AS date, CONCAT(ROUND(f.total_ht,2),' €') AS ht, CONCAT(ROUND(f.total_ttc,2),' €') AS ttc FROM " . MAIN_DB_PREFIX . "facture_fourn f LEFT JOIN " . MAIN_DB_PREFIX . "societe s ON s.rowid=f.fk_soc WHERE f.rowid > {MAX} ORDER BY f.rowid ASC LIMIT {NB}",
+		'head'   => array('Fournisseur', 'Date', 'Montant TTC', 'Etat', 'Cree le'),
+		'select' => "SELECT f.rowid, f.ref, s.nom AS fourn, DATE_FORMAT(f.datef,'%d/%m/%Y') AS date_f, CONCAT(ROUND(f.total_ttc,2),' €') AS ttc, IF(f.paye=1,'Payee',IF(f.fk_statut=1,'Ouverte','Brouillon')) AS statut, DATE_FORMAT(f.datec,'%d/%m/%Y %H:%i') AS cree_le FROM " . MAIN_DB_PREFIX . "facture_fourn f LEFT JOIN " . MAIN_DB_PREFIX . "societe s ON s.rowid=f.fk_soc ORDER BY f.rowid DESC LIMIT {NB}",
 		'url'    => '/fourn/facture/card.php?id=',
 	),
 	'generate-warehouse' => array(
 		'table'  => 'entrepot',
-		'head'   => array('Libellé', 'Lieu', 'Ville'),
-		'select' => "SELECT e.rowid, e.ref, e.label, IFNULL(e.lieu,'—') AS lieu, IFNULL(e.town,'—') AS town FROM " . MAIN_DB_PREFIX . "entrepot e WHERE e.rowid > {MAX} ORDER BY e.rowid ASC LIMIT {NB}",
+		'head'   => array('Libelle', 'Lieu', 'Ville', 'Cree le'),
+		'select' => "SELECT e.rowid, e.ref, e.label, IFNULL(e.lieu,'—') AS lieu, IFNULL(e.town,'—') AS town, DATE_FORMAT(e.datec,'%d/%m/%Y %H:%i') AS cree_le FROM " . MAIN_DB_PREFIX . "entrepot e ORDER BY e.rowid DESC LIMIT {NB}",
 		'url'    => '/product/stock/card.php?id=',
 	),
 	'generate-stock' => array(
 		'table'  => 'stock_mouvement',
-		'head'   => array('Produit', 'Entrepôt', 'Quantité', 'Lot / Série'),
-		'select' => "SELECT m.rowid, p.ref AS produit, e.ref AS entrepot, m.qty AS qte, IFNULL(m.batch,'') AS batch FROM " . MAIN_DB_PREFIX . "stock_mouvement m LEFT JOIN " . MAIN_DB_PREFIX . "product p ON p.rowid=m.fk_product LEFT JOIN " . MAIN_DB_PREFIX . "entrepot e ON e.rowid=m.fk_entrepot WHERE m.rowid > {MAX} AND m.type_mouvement = 0 ORDER BY m.rowid ASC LIMIT {NB}",
+		'head'   => array('Produit', 'Entrepot', 'Quantite', 'Lot / Serie', 'Date'),
+		'select' => "SELECT m.rowid, p.ref AS produit, e.ref AS entrepot, m.qty AS qte, IFNULL(m.batch,'—') AS batch, DATE_FORMAT(m.datem,'%d/%m/%Y %H:%i') AS datem FROM " . MAIN_DB_PREFIX . "stock_mouvement m LEFT JOIN " . MAIN_DB_PREFIX . "product p ON p.rowid=m.fk_product LEFT JOIN " . MAIN_DB_PREFIX . "entrepot e ON e.rowid=m.fk_entrepot WHERE m.type_mouvement=0 ORDER BY m.rowid DESC LIMIT {NB}",
 		'url'    => '/product/card.php?id=',
 	),
 );
+$preExecMaxRowid = 0;
 $preExecMaxRowid = 0;
 
 // ACTIONS — logique inline, pas de subprocess
@@ -1234,81 +1235,50 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 // RENDER
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// Post-execution: DB results + console text + ActionComm
+// Post-execution: console log + fichier + ActionComm
 $dbResults   = array();
 $dbHead      = array();
 $dbUrl       = '';
 $consoleText = '';
 $acId        = 0;
 $acLabel     = '';
+$logFilePath = '';
 
-if ($action === 'run' && isset($dsDbConf[$script])) {
-	$_conf  = $dsDbConf[$script];
-	$dbHead = $_conf['head'];
-	$dbUrl  = $_conf['url'];
-	$_sql   = str_replace(array('{MAX}', '{NB}'), array((int)$preExecMaxRowid, (int)($nb ?: 500)), $_conf['select']);
-	$_res   = $db->query($_sql);
-	while ($_res && ($_row = $db->fetch_array($_res))) {
-		$dbResults[] = $_row;
-	}
-	// Label ActionComm
+if ($action === 'run' && !empty($scriptLog)) {
 	$_scriptParams = 'nb=' . $nb;
 	foreach (array('product_type','with_stock','batch_mode','prefix','qty_max','stock_qty_max') as $_p) {
 		$_v = GETPOST($_p, 'alpha');
 		if ($_v !== '') $_scriptParams .= ' | ' . $_p . '=' . $_v;
 	}
-	$acLabel = 'DoliStream › ' . $script . ' | ' . $_scriptParams;
+	$acLabel = 'DoliStream > ' . $script . ' | ' . $_scriptParams;
 
-	// Console text: en-tete + lignes DB
-	$_heads  = array_merge(array('Ref.'), $dbHead);
-	$_widths = array_map('strlen', $_heads);
-	foreach ($dbResults as $_dr) {
-		foreach (array_values($_dr) as $_di => $_dv) {
-			$_w = mb_strlen((string)$_dv);
-			if (!isset($_widths[$_di]) || $_w > $_widths[$_di]) $_widths[$_di] = $_w;
-		}
-	}
-	$_sep = str_repeat('═', array_sum($_widths) + count($_widths)*3 + 1);
-	$_hln = implode(' | ', array_map(fn($h,$w) => str_pad($h,$w), $_heads, $_widths));
 	$consoleText  = 'Script     : ' . $script . "\n";
 	$consoleText .= 'Parametres : ' . $_scriptParams . "\n";
 	$consoleText .= 'Date       : ' . dol_print_date(dol_now(), 'dayhour') . "\n";
-	$consoleText .= $_sep . "\n" . $_hln . "\n" . str_repeat('─', mb_strlen($_sep)) . "\n";
-	foreach ($dbResults as $_dr) {
-		$_dv = array_values($_dr);
-		$consoleText .= implode(' | ', array_map(fn($v,$w) => str_pad((string)$v,$w), $_dv, $_widths)) . "\n";
-	}
-	$consoleText .= $_sep . "\n" . count($dbResults) . ' element(s) cree(s)' . "\n";
-
-	// ── Log raw (avec timestamps) ajoute a la fin du consoleText ───────────────
-	$consoleText .= "\n--- Log d execution ---\n";
+	$consoleText .= str_repeat('─', 70) . "\n";
 	foreach ($scriptLog as $_le) {
-		$_lic = $_le['level'] === 'success' ? '[OK]' : ($_le['level'] === 'error' ? '[ERR]' : '[WRN]');
+		$_lic = $_le['level'] === 'success' ? '[OK] ' : ($_le['level'] === 'error' ? '[ERR]' : '[WRN]');
 		$consoleText .= ($_le['time'] ?? date('H:i:s')) . ' ' . $_lic . ' ' . $_le['msg'] . "\n";
 	}
+	$consoleText .= str_repeat('─', 70) . "\n";
+	$_okN  = count(array_filter($scriptLog, fn($l) => $l['level'] === 'success'));
+	$_errN = count(array_filter($scriptLog, fn($l) => $l['level'] === 'error'));
+	$consoleText .= $_okN . ' OK — ' . $_errN . ' erreur(s)' . "\n";
 
-	// ── Sauvegarde du log dans documents/dolistream/ ─────────────────────────
 	$_logDir = DOL_DATA_ROOT . '/dolistream/';
-	if (!is_dir($_logDir)) {
-		dol_mkdir($_logDir);
-	}
-	$logFilePath = $_logDir . 'dolistream-' . preg_replace('/[^a-z0-9-]/', '', $script)
-		. '-' . date('Ymd-His') . '.txt';
+	if (!is_dir($_logDir)) dol_mkdir($_logDir);
+	$logFilePath = $_logDir . 'dolistream-' . preg_replace('/[^a-z0-9-]/', '', $script) . '-' . date('Ymd-His') . '.txt';
 	file_put_contents($logFilePath, $consoleText);
 
-	// ActionComm
-	if (!empty($dbResults)) {
-		$_noteHtml  = '<pre style="font-family:monospace;font-size:12px;background:#1e1e1e;color:#d4d4d4;padding:12px;border-radius:4px;">';
-		$_noteHtml .= htmlspecialchars($consoleText) . '</pre>';
-		$_ac = new ActionComm($db);
-		$_ac->type_code      = 'AC_OTH_AUTO';
-		$_ac->label          = $acLabel;
-		$_ac->note_private   = $_noteHtml;
-		$_ac->datep          = dol_now();
-		$_ac->fk_user_action = $fuser->id;
-		$_ac->percentage     = 100;
-		$acId = (int)$_ac->create($fuser);
-	}
+	$_noteHtml = '<pre style="font-family:monospace;font-size:12px;background:#1e1e1e;color:#d4d4d4;padding:12px;">' . htmlspecialchars($consoleText) . '</pre>';
+	$_ac = new ActionComm($db);
+	$_ac->type_code      = 'AC_OTH_AUTO';
+	$_ac->label          = $acLabel;
+	$_ac->note_private   = $_noteHtml;
+	$_ac->datep          = dol_now();
+	$_ac->fk_user_action = $fuser->id;
+	$_ac->percentage     = 100;
+	$acId = (int)$_ac->create($fuser);
 }
 
 $logFilePath = '';
@@ -1331,6 +1301,16 @@ foreach ($statsMap as $key => $info) {
 
 // ── Script actif ─────────────────────────────────────────────────────────────
 $activeScript = $script ?: 'generate-thirdparty';
+
+// ── DB listing toujours actif (25 derniers elements) ─────────────────────────
+if (!empty($dsDbConf[$activeScript])) {
+	$_conf  = $dsDbConf[$activeScript];
+	$dbHead = $_conf['head'];
+	$dbUrl  = $_conf['url'];
+	$_sql   = str_replace('{NB}', 25, $_conf['select']);
+	$_res   = $db->query($_sql);
+	while ($_res && ($_row = $db->fetch_array($_res))) $dbResults[] = $_row;
+}
 
 // ── Définitions des formulaires avec colonnes de résultat ─────────────────────
 $scriptDefs = array(
@@ -1948,7 +1928,6 @@ print dol_get_fiche_head($head, 'index', 'DoliStream', -1, 'technic');
 </form>
 
 
-<?php if ($action === 'run'): ?>
 
 <?php
 // ── Tableau DB (style Dolibarr list) ─────────────────────────────────────────
@@ -2059,9 +2038,6 @@ function dsCopy(){
 </script>
 <?php endif; ?>
 
-<?php else: ?>
-<div class="info">Sélectionnez un script dans le menu de gauche.</div>
-<?php endif; ?>
 
 
 <?php else: ?>
