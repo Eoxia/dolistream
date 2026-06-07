@@ -157,6 +157,7 @@ LogCommit = ✔ Transaction validée (COMMIT)
 LogTestFinished = ℹ Mode test terminé — aucune donnée modifiée.
 
 FieldNumberPerOrder=Nombre de produit par commande
+FieldNumberPerProposal=Nombre de produit par proposition
 FieldProductSelector=Sélecteur (Produit, lot, série)
 FieldProductWithStock=Produit avec du stock
 OptYes=Oui

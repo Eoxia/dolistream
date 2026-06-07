@@ -1443,30 +1443,6 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 	}
 }
 
-// ══ Mode AJAX : retourner JSON et quitter avant tout rendu HTML ═══════════════
-// Appelé depuis ajax/run.php qui a défini DOLISTREAM_AJAX_RUN.
-if (defined('DOLISTREAM_AJAX_RUN')) {
-	if ($action === 'run') {
-		$__ok   = count(array_filter($scriptLog, static fn($l) => $l['level'] === 'success'));
-		$__ko   = count(array_filter($scriptLog, static fn($l) => $l['level'] === 'error'));
-		$__warn = count(array_filter($scriptLog, static fn($l) => $l['level'] === 'warn'));
-		header('Content-Type: application/json; charset=utf-8');
-		header('Cache-Control: no-store');
-		echo json_encode([
-			'ok'           => $__ok,
-			'ko'           => $__ko,
-			'warn'         => $__warn,
-			'total'        => count($scriptLog),
-			'prev_max_rowid' => $preExecMaxRowid,
-		], JSON_UNESCAPED_UNICODE);
-	} else {
-		header('Content-Type: application/json; charset=utf-8');
-		echo json_encode(['error' => 'Expected action=run, got: ' . htmlspecialchars($action ?? '')]);
-	}
-	$db->close();
-	exit;
-}
-
 // Post-execution: console log + fichier + ActionComm
 $dbResults   = array();
 $dbHead      = array();
@@ -1511,6 +1487,30 @@ if ($action === 'run' && !empty($scriptLog)) {
 	$_ac->fk_user_action = $fuser->id;
 	$_ac->percentage     = 100;
 	$acId = (int)$_ac->create($fuser);
+}
+
+// ══ Mode AJAX : retourner JSON et quitter avant tout rendu HTML ═══════════════
+// Appelé depuis ajax/run.php qui a défini DOLISTREAM_AJAX_RUN.
+if (defined('DOLISTREAM_AJAX_RUN')) {
+	if ($action === 'run') {
+		$__ok   = count(array_filter($scriptLog, static fn($l) => $l['level'] === 'success'));
+		$__ko   = count(array_filter($scriptLog, static fn($l) => $l['level'] === 'error'));
+		$__warn = count(array_filter($scriptLog, static fn($l) => $l['level'] === 'warn'));
+		header('Content-Type: application/json; charset=utf-8');
+		header('Cache-Control: no-store');
+		echo json_encode([
+			'ok'           => $__ok,
+			'ko'           => $__ko,
+			'warn'         => $__warn,
+			'total'        => count($scriptLog),
+			'prev_max_rowid' => $preExecMaxRowid,
+		], JSON_UNESCAPED_UNICODE);
+	} else {
+		header('Content-Type: application/json; charset=utf-8');
+		echo json_encode(['error' => 'Expected action=run, got: ' . htmlspecialchars($action ?? '')]);
+	}
+	$db->close();
+	exit;
 }
 
 $logFilePath = '';
@@ -2172,8 +2172,29 @@ llxHeader('', 'DoliStream', '', '', 0, 0, '', '', '', 'mod-dolistream page-index
 
 <div class="fiche">
 <?php
-$head = array(array(dol_buildpath('/custom/dolistream/view/index.php', 1) . '?script=' . urlencode($activeScript), ($def ? $def['label'] : 'DoliStream'), 'index'));
-print dol_get_fiche_head($head, 'index', 'DoliStream', -1, 'technic');
+$activeTab = GETPOST('tab', 'alpha');
+if (empty($activeTab)) $activeTab = 'index';
+
+// Count ActionComms
+$nbEvent = 0;
+$sqlAc = "SELECT COUNT(*) as nb FROM " . MAIN_DB_PREFIX . "actioncomm WHERE label LIKE 'DoliStream %'";
+$resAc = $db->query($sqlAc);
+if ($resAc) {
+	$objAc = $db->fetch_object($resAc);
+	$nbEvent = $objAc->nb;
+	$db->free($resAc);
+}
+
+$agendaLabel = $langs->trans("Events") . '/' . $langs->trans("Agenda");
+if ($nbEvent > 0) {
+	$agendaLabel .= ' <span class="badge marginleftonlyshort">' . $nbEvent . '</span>';
+}
+
+$head = array();
+$head[] = array(dol_buildpath('/custom/dolistream/view/index.php', 1) . '?script=' . urlencode($activeScript) . '&tab=index', ($def ? $def['label'] : 'DoliStream'), 'index');
+$head[] = array(dol_buildpath('/custom/dolistream/view/index.php', 1) . '?script=' . urlencode($activeScript) . '&tab=agenda', $agendaLabel, 'agenda');
+
+print dol_get_fiche_head($head, $activeTab, 'DoliStream', -1, 'technic');
 ?>
 
 
@@ -2189,6 +2210,8 @@ print dol_get_fiche_head($head, 'index', 'DoliStream', -1, 'technic');
 	<a href="<?php print $_SERVER['PHP_SELF']; ?>?script=<?php print urlencode($activeScript); ?>" style="margin-left:auto;font-size:0.82em;color:var(--colorbackhmenu1,rgb(90,50,120))">↺ <?php print $langs->transnoentitiesnoconv('RefreshStats'); ?></a>
 </div>
 
+<?php if ($activeTab === 'index'): ?>
+
 <?php if ($def): ?>
 
 <?php if ($def['danger']): ?>
@@ -2197,38 +2220,68 @@ print dol_get_fiche_head($head, 'index', 'DoliStream', -1, 'technic');
 
 <div class="ds-hint">ℹ <?php print $def['hint']; ?></div>
 
-<!-- Formulaire 1 ligne -->
+<!-- Action Line -->
 <form id="ds-run-form" method="POST" action="<?php print $_SERVER['PHP_SELF']; ?>" style="margin-top:12px;">
 <input type="hidden" name="action" value="run">
 <input type="hidden" name="script" value="<?php print htmlspecialchars($activeScript); ?>">
 <input type="hidden" name="token" value="<?php print newToken(); ?>">
 <input type="hidden" name="token_check" value="1">
-<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
-<?php foreach ($def['fields'] as $field): ?>
-  <label style="display:flex;align-items:center;gap:6px;white-space:nowrap;">
-    <span style="font-weight:600;"><?php print $field['label']; ?> <span class="error">*</span></span>
-    <?php if ($field['type'] === 'select'): ?>
-      <select name="<?php print $field['name']; ?>" id="ds-fld-<?php print $field['name']; ?>" class="flat">
-      <?php
-        $selectedVal = ($field['name'] === 'opt' && !empty($urlOpt)) ? $urlOpt : ($field['default'] ?? '');
-        foreach ($field['options'] as $v => $l):
-      ?>
-        <option value="<?php print htmlspecialchars($v); ?>" <?php print ($selectedVal === $v ? 'selected' : ''); ?>><?php print htmlspecialchars($l); ?></option>
-<?php endforeach; ?>
-      </select>
-    <?php elseif ($field['type'] === 'checkbox'): ?>
-      <input type="checkbox" name="<?php print $field['name']; ?>" id="ds-fld-<?php print $field['name']; ?>" value="1" <?php print (!empty($field['default']) ? 'checked' : ''); ?>>
-    <?php elseif ($field['type'] === 'number'): ?>
-      <input type="number" name="<?php print $field['name']; ?>" id="ds-fld-<?php print $field['name']; ?>" class="flat" style="width:70px;"
-        value="<?php print (int)($field['default'] ?? 10); ?>"
-        min="<?php print $field['min'] ?? 1; ?>" max="<?php print $field['max'] ?? 100000; ?>" required>
-    <?php else: ?>
-      <input type="text" name="<?php print $field['name']; ?>" class="flat minwidth200"
-        value="<?php print htmlspecialchars($field['default'] ?? ''); ?>"
-        placeholder="<?php print htmlspecialchars($field['placeholder'] ?? ''); ?>">
-    <?php endif; ?>
-  </label>
-<?php endforeach; ?>
+
+<div class="ds-action-line" style="display:block; padding: 12px; border: 1px solid #e0e4e8; background: #fff; border-radius: 4px;">
+  <!-- L1: Ref, Icon, Title, Buttons -->
+  <div style="display:flex; align-items:center; flex-wrap:wrap; gap:16px;">
+    <div class="ds-action-ref" style="font-family:monospace; font-weight:bold; color:#666;">DS-0001</div>
+    <div class="ds-action-icon"><?php print img_object('', $def['icon']); ?></div>
+    <div class="ds-action-title" style="font-size:1.1em; font-weight:bold; color:var(--colortexttitlenotab);"><?php print $def['label']; ?></div>
+    
+    <div style="display:inline-flex;align-items:center;gap:8px;margin-left:auto;">
+      <div id="ds-ring" style="visibility:hidden;">
+        <div class="ds-ring-circle" id="ds-ring-circle"></div>
+      </div>
+      <?php if ($def['danger']): ?>
+        <button type="submit" id="ds-run-btn" class="butActionDelete"
+          onclick="return confirm('Continuer ?')"><?php print '&#128163; ' . $langs->transnoentitiesnoconv('RunScript'); ?></button>
+      <?php else: ?>
+        <button type="submit" id="ds-run-btn" class="butAction">&#9654; EXÉCUTER</button>
+      <?php endif; ?>
+      <a href="?script=<?php print htmlspecialchars($activeScript); ?>" class="butActionRefused" style="margin:0;">ANNULER</a>
+    </div>
+  </div>
+
+  <!-- L2: Params -->
+  <?php if (!empty($def['fields'])): ?>
+  <div style="display:flex; align-items:center; flex-wrap:wrap; gap:16px; margin-top:12px; padding-top:12px; border-top: 1px solid #f0f0f0;">
+    <div style="font-size:0.9em; color:#888; font-weight:bold; text-transform:uppercase;">Paramètres :</div>
+    <?php foreach ($def['fields'] as $field): ?>
+      <label style="display:flex;align-items:center;gap:6px;white-space:nowrap;">
+        <span style="font-weight:600;"><?php print $field['label']; ?> <span class="error">*</span></span>
+        <?php if ($field['type'] === 'select'): ?>
+          <select name="<?php print $field['name']; ?>" id="ds-fld-<?php print $field['name']; ?>" class="flat">
+          <?php
+            $selectedVal = ($field['name'] === 'opt' && !empty($urlOpt)) ? $urlOpt : ($field['default'] ?? '');
+            foreach ($field['options'] as $v => $l):
+          ?>
+            <option value="<?php print htmlspecialchars($v); ?>" <?php print ($selectedVal === $v ? 'selected' : ''); ?>><?php print htmlspecialchars($l); ?></option>
+    <?php endforeach; ?>
+          </select>
+        <?php elseif ($field['type'] === 'checkbox'): ?>
+          <input type="checkbox" name="<?php print $field['name']; ?>" id="ds-fld-<?php print $field['name']; ?>" value="1" <?php print (!empty($field['default']) ? 'checked' : ''); ?>>
+        <?php elseif ($field['type'] === 'number'): ?>
+          <input type="number" name="<?php print $field['name']; ?>" id="ds-fld-<?php print $field['name']; ?>" class="flat" style="width:70px;"
+            value="<?php print (int)($field['default'] ?? 10); ?>"
+            min="<?php print $field['min'] ?? 1; ?>" max="<?php print $field['max'] ?? 100000; ?>" required>
+        <?php else: ?>
+          <input type="text" name="<?php print $field['name']; ?>" class="flat minwidth200"
+            value="<?php print htmlspecialchars($field['default'] ?? ''); ?>"
+            placeholder="<?php print htmlspecialchars($field['placeholder'] ?? ''); ?>">
+        <?php endif; ?>
+      </label>
+    <?php endforeach; ?>
+  </div>
+  <?php endif; ?>
+</div>
+</form>
+
 <?php if ($activeScript === 'generate-stock' || $activeScript === 'generate-product'): ?>
 <script>
 (function(){
@@ -2252,26 +2305,6 @@ print dol_get_fiche_head($head, 'index', 'DoliStream', -1, 'technic');
 })();
 </script>
 <?php endif; ?>
-  <!-- Ring + boutons sur la même ligne -->
-  <div style="display:inline-flex;align-items:center;gap:8px;">
-    <!-- Ring: visibility:hidden par défaut = réserve l'espace, 0 décalage -->
-    <div id="ds-ring" style="visibility:hidden;">
-      <div class="ds-ring-circle" id="ds-ring-circle">
-
-      </div>
-    </div>
-    <?php if ($def['danger']): ?>
-      <button type="submit" id="ds-run-btn" class="butActionDelete"
-        onclick="return confirm('Continuer ?')"><?php print '&#128163; ' . $langs->transnoentitiesnoconv('RunScript'); ?></button>
-    <?php else: ?>
-      <button type="submit" id="ds-run-btn" class="butAction">&#9654; <?php print $langs->transnoentitiesnoconv('RunScript'); ?></button>
-    <?php endif; ?>
-    <a href="?script=<?php print htmlspecialchars($activeScript); ?>" class="butActionRefused"><?php print $langs->transnoentitiesnoconv('Cancel'); ?></a>
-  </div>
-</div>
-</form>
-
-
 
 <?php
 // ── Tableau DB (style Dolibarr list) ─────────────────────────────────────────
@@ -2340,6 +2373,52 @@ print_barre_liste(
 <?php else: ?>
 <div class="info">Aucun élément retourné par la base (vérifiez les logs ci-dessous).</div>
 <?php endif; ?>
+
+<?php endif; /* end tab index */ ?>
+
+<?php if ($activeTab === 'agenda'): ?>
+<?php
+// ── Tableau ActionComm ───────────────────────────────────────────────────────
+print_barre_liste(
+	'Événements générés (ActionComm)',
+	$page, $_SERVER['PHP_SELF'], 'script=' . urlencode($activeScript),
+	'', '', '',
+	0, 0, '', 0, '', '', 25
+);
+
+$sql = "SELECT a.id as rowid, a.label, a.datep, a.note as note_private ";
+$sql .= "FROM " . MAIN_DB_PREFIX . "actioncomm as a ";
+$sql .= "WHERE a.label LIKE 'DoliStream %' ";
+$sql .= "ORDER BY a.datep DESC LIMIT 50";
+$resql = $db->query($sql);
+if ($resql) {
+	print '<table class="noborder centpercent">';
+	print '<tr class="liste_titre">';
+	print '<th style="width:100px;">ID</th>';
+	print '<th style="width:160px;">' . $langs->trans('Date') . '</th>';
+	print '<th style="width:250px;">' . $langs->trans('Label') . '</th>';
+	print '<th>Log / Description</th>';
+	print '</tr>';
+	$num = $db->num_rows($resql);
+	if ($num) {
+		while ($obj = $db->fetch_object($resql)) {
+			print '<tr class="oddeven">';
+			print '<td class="nowrap"><a href="' . DOL_URL_ROOT . '/comm/action/card.php?id=' . $obj->rowid . '">' . img_object('', 'action') . ' ' . $obj->rowid . '</a></td>';
+			print '<td class="nowrap">' . dol_print_date($db->jdate($obj->datep), 'dayhour') . '</td>';
+			print '<td><strong>' . htmlspecialchars($obj->label) . '</strong></td>';
+			print '<td><div style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; background: #fafafa; padding: 4px;">' . $obj->note_private . '</div></td>';
+			print '</tr>';
+		}
+	} else {
+		print '<tr><td colspan="4" class="opacitymedium" style="padding: 20px; text-align: center;">Aucun événement généré pour le moment.<br>Lancez un script pour voir les logs d\'exécution ici.</td></tr>';
+	}
+	print '</table>';
+	$db->free($resql);
+} else {
+	print $db->error();
+}
+?>
+<?php endif; /* end tab agenda */ ?>
 
 <?php
 // ── Console : charge dernier fichier log si pas de session courante ───────────
