@@ -150,3 +150,12 @@ LogTestModeNothing = → (modo test: no se eliminará nada)
 LogRollback = ✘ Errores detectados — ROLLBACK realizado
 LogCommit = ✔ Transacción confirmada (COMMIT)
 LogTestFinished = ℹ Modo test completado — ningún dato fue modificado.
+
+FieldNumberPerProposal=Número de productos por presupuesto
+# ── Workflows ──────────────────────────────────────────────────────────────────
+Workflow = Workflow
+WorkflowOppClPr = OPP+CL+PR
+WorkflowOppClPrTitle = Workflow OPP+CL+PR (Oportunidad + Cliente + Presupuesto)
+HintWorkflowOppClPr = Cada ejecución crea un cliente, una oportunidad (proyecto) vinculada a ese cliente y un presupuesto asociado a la oportunidad. El importe de la oportunidad se alinea con el total del presupuesto (sin IVA).
+FieldNbWorkflowRuns = Número de ejecuciones
+ColOpportunity = Oportunidad

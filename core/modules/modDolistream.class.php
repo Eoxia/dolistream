@@ -287,6 +287,39 @@ class modDolistream extends DolibarrModules
 			'target'   => '',
 			'user'     => 0,
 		);
+		// Left menu — Workflow (parent)
+		$this->menu[$r++] = array(
+			'fk_menu'  => 'fk_mainmenu=dolistream',
+			'type'     => 'left',
+			'titre'    => 'Workflow',
+			'prefix'   => img_picto('', 'technic', 'class="pictofixedwidth valignmiddle"'),
+			'mainmenu' => 'dolistream',
+			'leftmenu' => 'dolistream_workflow',
+			'url'      => '/dolistream/view/index.php?script=workflow-opp-cl-pr',
+			'langs'    => 'dolistream@dolistream',
+			'position' => 1000 + $r,
+			'enabled'  => "isModEnabled('dolistream')",
+			'perms'    => '$user->hasRight("dolistream", "generate", "run")',
+			'target'   => '',
+			'user'     => 0,
+		);
+
+		// Left menu — OPP+CL+PR (sous Workflow)
+		$this->menu[$r++] = array(
+			'fk_menu'  => 'fk_mainmenu=dolistream,fk_leftmenu=dolistream_workflow',
+			'type'     => 'left',
+			'titre'    => 'WorkflowOppClPr',
+			'mainmenu' => 'dolistream',
+			'leftmenu' => 'dolistream_workflow_opp_cl_pr',
+			'url'      => '/dolistream/view/index.php?script=workflow-opp-cl-pr',
+			'langs'    => 'dolistream@dolistream',
+			'position' => 1000 + $r,
+			'enabled'  => "isModEnabled('dolistream')",
+			'perms'    => '$user->hasRight("dolistream", "generate", "run")',
+			'target'   => '',
+			'user'     => 0,
+		);
+
 		// Left menu — Purger les données
 		$this->menu[$r++] = array(
 			'fk_menu'  => 'fk_mainmenu=dolistream',
