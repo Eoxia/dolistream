@@ -320,23 +320,6 @@ class modDolistream extends DolibarrModules
 			'user'     => 0,
 		);
 
-		// Left menu — Purger les données
-		$this->menu[$r++] = array(
-			'fk_menu'  => 'fk_mainmenu=dolistream',
-			'type'     => 'left',
-			'titre'    => 'Purger les données',
-			'prefix'   => img_picto('', 'delete', 'class="pictofixedwidth valignmiddle"'),
-			'mainmenu' => 'dolistream',
-			'leftmenu' => 'dolistream_purge',
-			'url'      => '/dolistream/view/index.php?script=purge-data',
-			'langs'    => 'dolistream@dolistream',
-			'position' => 1000 + $r,
-			'enabled'  => "isModEnabled('dolistream')",
-			'perms'    => '$user->hasRight("dolistream", "purge", "run")',
-			'target'   => '',
-			'user'     => 0,
-		);
-
 		// Left menu — Réglages
 		$this->menu[$r++] = array(
 			'fk_menu'  => 'fk_mainmenu=dolistream',
@@ -350,6 +333,23 @@ class modDolistream extends DolibarrModules
 			'position' => 1000 + $r,
 			'enabled'  => "isModEnabled('dolistream')",
 			'perms'    => '$user->admin',
+			'target'   => '',
+			'user'     => 0,
+		);
+
+		// Left menu — Purger les données (sous Réglages)
+		$this->menu[$r++] = array(
+			'fk_menu'  => 'fk_mainmenu=dolistream,fk_leftmenu=dolistream_setup',
+			'type'     => 'left',
+			'titre'    => 'Purger les données',
+			'prefix'   => img_picto('', 'delete', 'class="pictofixedwidth valignmiddle"'),
+			'mainmenu' => 'dolistream',
+			'leftmenu' => 'dolistream_purge',
+			'url'      => '/dolistream/view/index.php?script=purge-data',
+			'langs'    => 'dolistream@dolistream',
+			'position' => 1000 + $r,
+			'enabled'  => "isModEnabled('dolistream')",
+			'perms'    => '$user->hasRight("dolistream", "purge", "run")',
 			'target'   => '',
 			'user'     => 0,
 		);
