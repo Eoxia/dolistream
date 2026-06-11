@@ -205,6 +205,12 @@ $dsDbConf = array(
 		'select' => "SELECT p.rowid, p.ref, p.label, CAST(IFNULL(ROUND(SUM(ps.reel),0),0) AS SIGNED) AS stock, IF(p.fk_product_type=0,'Produit','Service') AS type_prod, IF(p.tobatch=0,'Non',IF(p.tobatch=1,'Lot','Serie')) AS lot_serie, DATE_FORMAT(DATE_ADD(p.tms, INTERVAL TIME_TO_SEC(TIMEDIFF(NOW(),UTC_TIMESTAMP())) SECOND),'%d/%m/%Y %H:%i') AS modifie_le FROM " . MAIN_DB_PREFIX . "product p LEFT JOIN " . MAIN_DB_PREFIX . "product_stock ps ON ps.fk_product=p.rowid GROUP BY p.rowid ORDER BY p.rowid DESC LIMIT {NB}",
 		'url'    => '/product/card.php?id=',
 	),
+	'generate-rental' => array(
+		'table'  => 'loc_location',
+		'head'   => array($langs->transnoentitiesnoconv('Ref'), $langs->transnoentitiesnoconv('ThirdParty'), $langs->transnoentitiesnoconv('Date'), $langs->transnoentitiesnoconv('Status')),
+		'select' => "SELECT l.rowid, l.ref, s.nom AS tiers, DATE_FORMAT(l.date_creation,'%d/%m/%Y') AS date_crea, IF(l.statut=0,'Brouillon','Validé') AS statut FROM " . MAIN_DB_PREFIX . "loc_location l LEFT JOIN " . MAIN_DB_PREFIX . "societe s ON s.rowid=l.fk_soc ORDER BY l.rowid DESC LIMIT {NB}",
+		'url'    => '/rental/card.php?id=',
+	),
 );
 $preExecMaxRowid = 0;
 

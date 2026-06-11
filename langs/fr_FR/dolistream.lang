@@ -169,3 +169,7 @@ WorkflowOppClPrTitle = Workflow OPP+CL+PR (Opportunité + Client + Devis)
 HintWorkflowOppClPr = Chaque exécution crée un client, une opportunité (projet) liée à ce client, puis un devis rattaché à l'opportunité. Le montant de l'opportunité est aligné sur le total HT du devis.
 FieldNbWorkflowRuns = Nombre d'exécutions
 ColOpportunity = Opportunité
+ExternalModules=Modules externes
+ExternalModulesDesc=Activez ou désactivez les fonctionnalités de test de charge liées aux modules externes.
+ModuleRental=Module Location (Rental)
+DolistreamRentalDesc=Permet de générer de fausses locations en masse pour le module Rental.

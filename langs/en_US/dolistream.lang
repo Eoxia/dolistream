@@ -164,3 +164,7 @@ WorkflowOppClPrTitle = Workflow OPP+CL+PR (Opportunity + Customer + Proposal)
 HintWorkflowOppClPr = Each run creates a customer, an opportunity (project) linked to that customer, then a commercial proposal attached to the opportunity. The opportunity amount is aligned with the proposal total (excl. tax).
 FieldNbWorkflowRuns = Number of runs
 ColOpportunity = Opportunity
+ExternalModules=External Modules
+ExternalModulesDesc=Enable or disable load testing features related to external modules.
+ModuleRental=Rental Module
+DolistreamRentalDesc=Allows massive generation of dummy rentals for the Rental module.
