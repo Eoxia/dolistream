@@ -1646,7 +1646,8 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 					dsLog('✓ #' . $s . ' | ' . $product->ref . ' | ' . $whName . ' | +' . $qty . ' | ' . $batchStr, 'success');
 					$ok++;
 				} else {
-					dsLog('✗ #' . $s . ' [' . $product->ref . '] ' . $mouvement->error, 'error');
+					$errStr = !empty($mouvement->error) ? $mouvement->error : (!empty($mouvement->errors) ? implode(', ', $mouvement->errors) : 'Erreur inconnue');
+					dsLog('✗ #' . $s . ' [' . $product->ref . '] ' . $errStr, 'error');
 					$ko++;
 				}
 
@@ -1672,19 +1673,21 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 					dsLog('✓ #' . $s . ' | ' . $product->ref . ' | ' . $whName . ' | +' . $qty . ' SN (qty=1/unité) | ' . $batchStr, 'success');
 					$ok++;
 				} else {
-					dsLog('✗ #' . $s . ' [' . $product->ref . '] série impossible', 'error');
+					$errStr = isset($mouvement) ? (!empty($mouvement->error) ? $mouvement->error : (!empty($mouvement->errors) ? implode(', ', $mouvement->errors) : 'Erreur inconnue')) : 'Erreur inconnue';
+					dsLog('✗ #' . $s . ' [' . $product->ref . '] série impossible (' . $errStr . ')', 'error');
 					$ko++;
 				}
 
 			} else {
-				// Sans lot ni série
+				// Sans lot ni série, on force skip_batch = true pour contourner si le produit l'exige
 				$mouvement = new MouvementStock($db);
-				$res = $mouvement->_create($fuser, $productId, $whId, $qty, 0, $product->price, 'DoliStream stock');
+				$res = $mouvement->_create($fuser, $productId, $whId, $qty, 0, $product->price, 'DoliStream stock', '', '', 0, 0, '', true);
 				if ($res > 0) {
 					dsLog('✓ #' . $s . ' | ' . $product->ref . ' | ' . $whName . ' | +' . $qty, 'success');
 					$ok++;
 				} else {
-					dsLog('✗ #' . $s . ' [' . $product->ref . '] ' . $mouvement->error, 'error');
+					$errStr = !empty($mouvement->error) ? $mouvement->error : (!empty($mouvement->errors) ? implode(', ', $mouvement->errors) : 'Erreur inconnue');
+					dsLog('✗ #' . $s . ' [' . $product->ref . '] ' . $errStr, 'error');
 					$ko++;
 				}
 			}
