@@ -1679,9 +1679,9 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 				}
 
 			} else {
-				// Sans lot ni série, on force skip_batch = true pour contourner si le produit l'exige
+				// Sans lot ni série, ne pas forcer le skip_batch si le produit l'exige
 				$mouvement = new MouvementStock($db);
-				$res = $mouvement->_create($fuser, $productId, $whId, $qty, 0, $product->price, 'DoliStream stock', '', '', 0, 0, '', true);
+				$res = $mouvement->_create($fuser, $productId, $whId, $qty, 0, $product->price, 'DoliStream stock');
 				if ($res > 0) {
 					dsLog('✓ #' . $s . ' | ' . $product->ref . ' | ' . $whName . ' | +' . $qty, 'success');
 					$ok++;
