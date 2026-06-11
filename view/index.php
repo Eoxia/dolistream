@@ -190,7 +190,7 @@ $dsDbConf = array(
 	'generate-warehouse' => array(
 		'table'  => 'entrepot',
 		'head'   => array($langs->transnoentitiesnoconv('Label'), $langs->transnoentitiesnoconv('ColPlace'), $langs->transnoentitiesnoconv('Town'), $langs->transnoentitiesnoconv('ColCreatedAt')),
-		'select' => "SELECT e.rowid, e.ref, e.label, IFNULL(e.lieu,'—') AS lieu, IFNULL(e.town,'—') AS town, DATE_FORMAT(DATE_ADD(e.datec, INTERVAL TIME_TO_SEC(TIMEDIFF(NOW(),UTC_TIMESTAMP())) SECOND),'%d/%m/%Y %H:%i') AS cree_le FROM " . MAIN_DB_PREFIX . "entrepot e ORDER BY e.rowid DESC LIMIT {NB}",
+		'select' => "SELECT e.rowid, e.ref, e.ref AS label, IFNULL(e.lieu,'—') AS lieu, IFNULL(e.town,'—') AS town, DATE_FORMAT(DATE_ADD(e.datec, INTERVAL TIME_TO_SEC(TIMEDIFF(NOW(),UTC_TIMESTAMP())) SECOND),'%d/%m/%Y %H:%i') AS cree_le FROM " . MAIN_DB_PREFIX . "entrepot e ORDER BY e.rowid DESC LIMIT {NB}",
 		'url'    => '/product/stock/card.php?id=',
 	),
 	'workflow-opp-cl-pr' => array(
