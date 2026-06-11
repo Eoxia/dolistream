@@ -27,6 +27,11 @@ function dolinstreamAdminPrepareHead(): array
 	$head[$h][2] = 'settings';
 	$h++;
 
+	$head[$h][0] = DOL_URL_ROOT . '/custom/dolistream/admin/external.php';
+	$head[$h][1] = $langs->trans('ExternalModules');
+	$head[$h][2] = 'external';
+	$h++;
+
 	$head[$h][0] = DOL_URL_ROOT . '/custom/dolistream/admin/about.php';
 	$head[$h][1] = $langs->trans('About');
 	$head[$h][2] = 'about';
