@@ -61,6 +61,14 @@ if (!isModEnabled('dolistream')) {
 	exit;
 }
 
+global $dolibarr_main_prod;
+if (!empty($dolibarr_main_prod)) {
+	http_response_code(403);
+	header('Content-Type: application/json; charset=utf-8');
+	echo json_encode(['error' => 'DoliStream cannot be used in a production environment (dolibarr_main_prod=1)']);
+	exit;
+}
+
 // ── Déléguer l'exécution à view/index.php ────────────────────────────────────
 // index.php voit DOLISTREAM_AJAX_RUN défini + $db déjà initialisé →
 //   • skip du re-bootstrap (guard en haut de index.php)

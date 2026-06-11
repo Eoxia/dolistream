@@ -58,6 +58,11 @@ require_once DOL_DOCUMENT_ROOT . '/comm/action/class/actioncomm.class.php';
 if (!isModEnabled('dolistream')) {
 	accessforbidden('Module DoliStream is not enabled');
 }
+
+global $dolibarr_main_prod;
+if (!empty($dolibarr_main_prod)) {
+	accessforbidden('DoliStream cannot be used in a production environment (dolibarr_main_prod=1)');
+}
 if (!$user->admin && !$user->hasRight('dolistream', 'generate', 'run')) {
 	accessforbidden();
 }

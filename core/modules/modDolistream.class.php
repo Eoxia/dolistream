@@ -336,6 +336,23 @@ class modDolistream extends DolibarrModules
 			'target'   => '',
 			'user'     => 0,
 		);
+
+		// Left menu — Réglages
+		$this->menu[$r++] = array(
+			'fk_menu'  => 'fk_mainmenu=dolistream',
+			'type'     => 'left',
+			'titre'    => 'Réglages',
+			'prefix'   => img_picto('', 'setup', 'class="pictofixedwidth valignmiddle"'),
+			'mainmenu' => 'dolistream',
+			'leftmenu' => 'dolistream_setup',
+			'url'      => '/dolistream/admin/setup.php',
+			'langs'    => 'dolistream@dolistream',
+			'position' => 1000 + $r,
+			'enabled'  => "isModEnabled('dolistream')",
+			'perms'    => '$user->admin',
+			'target'   => '',
+			'user'     => 0,
+		);
 	}
 
 	/**
@@ -346,6 +363,12 @@ class modDolistream extends DolibarrModules
 	 */
 	public function init($options = '')
 	{
+		global $dolibarr_main_prod, $langs;
+		if (!empty($dolibarr_main_prod)) {
+			$this->error = "DoliStream cannot be enabled in a production environment.";
+			return -1;
+		}
+
 		$this->remove($options);
 		return $this->_init(array(), $options);
 	}
