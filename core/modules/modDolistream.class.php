@@ -320,6 +320,39 @@ class modDolistream extends DolibarrModules
 			'user'     => 0,
 		);
 
+		// Left menu — Modules Externes (parent)
+		$this->menu[$r++] = array(
+			'fk_menu'  => 'fk_mainmenu=dolistream',
+			'type'     => 'left',
+			'titre'    => 'ExternalModules',
+			'prefix'   => img_picto('', 'plug', 'class="pictofixedwidth valignmiddle"'),
+			'mainmenu' => 'dolistream',
+			'leftmenu' => 'dolistream_external',
+			'url'      => '/dolistream/view/index.php?script=generate-rental',
+			'langs'    => 'dolistream@dolistream',
+			'position' => 1000 + $r,
+			'enabled'  => "isModEnabled('dolistream') && (getDolGlobalString('DOLISTREAM_ENABLE_RENTAL'))",
+			'perms'    => '$user->hasRight("dolistream", "generate", "run")',
+			'target'   => '',
+			'user'     => 0,
+		);
+
+		// Left menu — Rental (External)
+		$this->menu[$r++] = array(
+			'fk_menu'  => 'fk_mainmenu=dolistream,fk_leftmenu=dolistream_external',
+			'type'     => 'left',
+			'titre'    => 'ModuleRental',
+			'mainmenu' => 'dolistream',
+			'leftmenu' => 'dolistream_rental',
+			'url'      => '/dolistream/view/index.php?script=generate-rental',
+			'langs'    => 'dolistream@dolistream',
+			'position' => 1000 + $r,
+			'enabled'  => "isModEnabled('dolistream') && isModEnabled('rental') && getDolGlobalString('DOLISTREAM_ENABLE_RENTAL')",
+			'perms'    => '$user->hasRight("dolistream", "generate", "run")',
+			'target'   => '',
+			'user'     => 0,
+		);
+
 		// Left menu — Réglages
 		$this->menu[$r++] = array(
 			'fk_menu'  => 'fk_mainmenu=dolistream',
