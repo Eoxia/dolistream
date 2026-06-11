@@ -346,6 +346,12 @@ class modDolistream extends DolibarrModules
 	 */
 	public function init($options = '')
 	{
+		global $dolibarr_main_prod, $langs;
+		if (!empty($dolibarr_main_prod)) {
+			$this->error = "DoliStream cannot be enabled in a production environment.";
+			return -1;
+		}
+
 		$this->remove($options);
 		return $this->_init(array(), $options);
 	}
