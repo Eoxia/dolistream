@@ -188,6 +188,12 @@ $dsDbConf = array(
 		'select' => "SELECT e.rowid, e.ref, e.label, IFNULL(e.lieu,'—') AS lieu, IFNULL(e.town,'—') AS town, DATE_FORMAT(DATE_ADD(e.datec, INTERVAL TIME_TO_SEC(TIMEDIFF(NOW(),UTC_TIMESTAMP())) SECOND),'%d/%m/%Y %H:%i') AS cree_le FROM " . MAIN_DB_PREFIX . "entrepot e ORDER BY e.rowid DESC LIMIT {NB}",
 		'url'    => '/product/stock/card.php?id=',
 	),
+	'workflow-opp-cl-pr' => array(
+		'table'  => 'propal',
+		'head'   => array($langs->transnoentitiesnoconv('ColOpportunity'), $langs->transnoentitiesnoconv('ThirdParty'), $langs->transnoentitiesnoconv('AmountHT'), $langs->transnoentitiesnoconv('Status'), $langs->transnoentitiesnoconv('ColCreatedAt')),
+		'select' => "SELECT p.rowid, p.ref, IFNULL(pj.ref,'—') AS opp, IFNULL(s.nom,'—') AS tiers, CONCAT(ROUND(p.total_ht,2),' €') AS ht, IF(p.fk_statut=0,'Brouillon',IF(p.fk_statut=1,'Ouverte',IF(p.fk_statut=2,'Signee','Clot.'))) AS statut, DATE_FORMAT(DATE_ADD(p.datec, INTERVAL TIME_TO_SEC(TIMEDIFF(NOW(),UTC_TIMESTAMP())) SECOND),'%d/%m/%Y %H:%i') AS cree_le FROM " . MAIN_DB_PREFIX . "propal p LEFT JOIN " . MAIN_DB_PREFIX . "societe s ON s.rowid=p.fk_soc LEFT JOIN " . MAIN_DB_PREFIX . "projet pj ON pj.rowid=p.fk_projet ORDER BY p.rowid DESC LIMIT {NB}",
+		'url'    => '/comm/propal/card.php?id=',
+	),
 	'generate-stock' => array(
 		'table'  => 'product',
 		'head'   => array($langs->transnoentitiesnoconv('Label'), $langs->transnoentitiesnoconv('Stock'), $langs->transnoentitiesnoconv('Type'), $langs->transnoentitiesnoconv('Batch'), $langs->transnoentitiesnoconv('ColModifiedAt')),
@@ -953,6 +959,166 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 			}
 		}
 		dolinstreamProgress($nb, $nb, true); // marque terminé
+		dsLog('─── ' . $ok . ' OK, ' . $ko . ' erreur(s) ───');
+
+	// ════════════════════════════════════════════════════════════════════════
+	} elseif ($script === 'workflow-opp-cl-pr') {
+	// ════════════════════════════════════════════════════════════════════════
+		// Workflow : chaque itération crée ① un client ② une opportunité liée
+		// à ce client ③ un devis rattaché à l'opportunité et au client.
+		if (!isModEnabled('project')) {
+			dsLog('❌ Module Projets requis pour créer des opportunités.', 'error');
+			goto render;
+		}
+		if (!isModEnabled('propal')) {
+			dsLog('❌ Module Propositions commerciales requis pour créer des devis.', 'error');
+			goto render;
+		}
+
+		$nbLinesOpt = max(1, (int) (GETPOST('nb_lines', 'int') ?: 2));
+		$prodids    = dolinstreamGetProductIds($db);
+		if (empty($prodids)) {
+			dsLog('⚠ Aucun produit en vente — les devis seront créés sans ligne.', 'warn');
+		}
+
+		// Module de numérotation projet (même pattern que generate-project)
+		$addonName  = getDolGlobalString('PROJECT_ADDON', 'mod_project_simple');
+		$addonFile  = DOL_DOCUMENT_ROOT . '/core/modules/project/' . $addonName . '.php';
+		$modProject = null;
+		if (file_exists($addonFile)) {
+			require_once $addonFile;
+			$modProject = new $addonName();
+		}
+
+		$listoftown = array('Paris', 'Lyon', 'Marseille', 'Bordeaux', 'Nantes', 'Toulouse', 'Strasbourg', 'Lille', 'Rennes', 'Vannes');
+		// Statuts d'opportunité (llx_c_lead_status) — cycle ouvert uniquement
+		$oppStatuses = array(
+			1 => array('label' => 'Prospection', 'pct' => mt_rand(10, 25)),
+			2 => array('label' => 'Qualifié',    'pct' => mt_rand(25, 45)),
+			3 => array('label' => 'Proposition', 'pct' => mt_rand(40, 65)),
+			4 => array('label' => 'Négociation', 'pct' => mt_rand(60, 85)),
+		);
+
+		dsLog('Workflow OPP+CL+PR : ' . $nb . ' exécution(s) — Client → Opportunité → Devis');
+		$ok = $ko = 0;
+
+		for ($s = 0; $s < $nb; $s++) {
+			dsLog('── Workflow #' . ($s + 1) . ' ──');
+
+			// ① CLIENT ────────────────────────────────────────────────────────
+			$soc               = new Societe($db);
+			$soc->name         = 'Client WF ' . dol_print_date(dol_now(), 'dayhour') . '-' . $s;
+			$soc->town         = $listoftown[array_rand($listoftown)];
+			$soc->client       = 1;
+			$soc->fournisseur  = 0;
+			$soc->code_client  = -1; // numérotation auto
+			$soc->tva_assuj    = 1;
+			$soc->country_id   = 1;
+			$soc->country_code = 'FR';
+			$soc->note_private = 'Créé par DoliStream (workflow OPP+CL+PR)';
+
+			$socid = $soc->create($fuser);
+			if ($socid <= 0) {
+				dsLog('✘ #' . $s . ' — création client : ' . $soc->error, 'error');
+				$ko++;
+				continue;
+			}
+			dsLog('① Client : ' . $soc->name . ' (id=' . $socid . ')');
+
+			// ② OPPORTUNITÉ liée au client ────────────────────────────────────
+			$oppKey    = array_rand($oppStatuses);
+			$oppStatus = $oppStatuses[$oppKey];
+
+			$proj         = new Project($db);
+			$proj->date_c = dol_now();
+			$projRef      = ($modProject !== null) ? $modProject->getNextValue(null, $proj) : '';
+			if (!$projRef || (is_numeric($projRef) && (int) $projRef <= 0)) {
+				dsLog('✘ #' . $s . ' — référence projet impossible via ' . $addonName, 'error');
+				$ko++;
+				continue;
+			}
+
+			$proj->ref               = $projRef;
+			$proj->title             = 'Opportunité ' . $soc->name;
+			$proj->description       = 'Généré par DoliStream (workflow OPP+CL+PR)';
+			$proj->date_start        = $proj->date_c;
+			$proj->date_end          = $proj->date_start + mt_rand(30, 180) * 24 * 3600;
+			$proj->statut            = Project::STATUS_VALIDATED;
+			$proj->usage_opportunity = 1;
+			$proj->opp_status        = $oppKey;
+			$proj->opp_percent       = $oppStatus['pct'];
+			$proj->opp_amount        = 0; // recalé sur le total HT du devis après validation
+			$proj->public            = 1;
+			$proj->socid             = $socid;
+			$proj->fk_user_creat     = $fuser->id;
+
+			if ($proj->create($fuser) <= 0) {
+				dsLog('✘ #' . $s . ' — création opportunité : ' . $proj->error, 'error');
+				$ko++;
+				continue;
+			}
+			dsLog('② Opportunité : ' . $proj->ref . ' | ' . $oppStatus['label'] . ' (' . $proj->opp_percent . '%) | client=' . $soc->name);
+
+			// ③ DEVIS sur l'opportunité ───────────────────────────────────────
+			$devis                    = new Propal($db);
+			$devis->socid             = $socid;
+			$devis->date              = dol_now();
+			$devis->date_fin_validite = $devis->date + (30 * 24 * 3600);
+			$devis->cond_reglement_id = 3;
+			$devis->mode_reglement_id = 3;
+			$devis->fk_project        = $proj->id;
+
+			if ($devis->create($fuser) < 0) {
+				dsLog('✘ #' . $s . ' — création devis : ' . $devis->error, 'error');
+				$ko++;
+				continue;
+			}
+
+			for ($l = 0; $l < $nbLinesOpt; $l++) {
+				if (empty($prodids)) break;
+				$pid     = $prodids[array_rand($prodids)];
+				$product = new Product($db);
+				$product->fetch($pid);
+				$rLine = $devis->addline(
+					$product->description ?: $product->label,
+					$product->price,
+					mt_rand(1, 5),
+					$product->tva_tx ?? 20,
+					0, 0,
+					$pid,
+					0,
+					$product->price_base_type,
+					$product->price_ttc,
+					0,
+					$product->type
+				);
+				if ($rLine < 0) dsLog('⚠ addline pid=' . $pid . ' : ' . $devis->error, 'warn');
+			}
+
+			// Même pattern que generate-proposal : recharge complète avant valid()
+			$devis->fetch($devis->id);
+			$devis->fetch_thirdparty();
+			$devis->fetch_lines();
+			if ($devis->valid($fuser) <= 0) {
+				dsLog('✘ #' . $s . ' — validation devis : ' . $devis->error, 'error');
+				$ko++;
+				continue;
+			}
+			$devis->fetch($devis->id);
+			$ht = price2num($devis->total_ht, 'MT');
+
+			// Recale le montant de l'opportunité sur le total HT du devis
+			$db->query('UPDATE ' . MAIN_DB_PREFIX . 'projet SET opp_amount = ' . ((float) $devis->total_ht) . ', budget_amount = ' . ((float) $devis->total_ht) . ' WHERE rowid = ' . ((int) $proj->id));
+
+			dsLog('③ Devis : ' . $devis->ref . ' | HT=' . $ht . ' | opp=' . $proj->ref);
+			dsLog('✔ #' . $s . ' | ' . $soc->name . ' | ' . $proj->ref . ' | ' . $devis->ref . ' | HT=' . $ht, 'success');
+			$ok++;
+
+			if ($s % 5 === 0 || $s === $nb - 1) {
+				dolinstreamProgress($s + 1, $nb);
+			}
+		}
+		dolinstreamProgress($nb, $nb, true);
 		dsLog('─── ' . $ok . ' OK, ' . $ko . ' erreur(s) ───');
 
 	// ─
@@ -1873,6 +2039,19 @@ $scriptDefs = array(
 		'columns' => array($langs->transnoentitiesnoconv('Ref'), $langs->transnoentitiesnoconv('Date'), $langs->transnoentitiesnoconv('Supplier'), $langs->transnoentitiesnoconv('AmountHT'), $langs->transnoentitiesnoconv('AmountTTC')),
 		'fields'  => array(
 			array('name' => 'nb', 'label' => $langs->transnoentitiesnoconv('NumberToGenerate'), 'type' => 'number', 'default' => 10, 'min' => 1, 'max' => 2000),
+		),
+	),
+	// ── Workflows ─────────────────────────────────────────────────────────────
+	'workflow-opp-cl-pr' => array(
+		'label'   => $langs->transnoentitiesnoconv('WorkflowOppClPrTitle'),
+		'icon'    => 'technic',
+		'hint'    => $langs->transnoentitiesnoconv('HintWorkflowOppClPr'),
+		'danger'  => false,
+		'perm'    => 'generate',
+		'columns' => array($langs->transnoentitiesnoconv('Ref'), $langs->transnoentitiesnoconv('ColOpportunity'), $langs->transnoentitiesnoconv('ThirdParty'), $langs->transnoentitiesnoconv('AmountHT')),
+		'fields'  => array(
+			array('name' => 'nb', 'label' => $langs->transnoentitiesnoconv('FieldNbWorkflowRuns'), 'type' => 'number', 'default' => 1, 'min' => 1, 'max' => 500),
+			array('name' => 'nb_lines', 'label' => $langs->transnoentitiesnoconv('FieldNumberPerProposal'), 'type' => 'number', 'default' => 2, 'min' => 1, 'max' => 20),
 		),
 	),
 );

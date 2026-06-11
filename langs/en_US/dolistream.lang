@@ -155,3 +155,12 @@ LogTestModeNothing = → (test mode: nothing will be deleted)
 LogRollback = ✘ Errors detected — ROLLBACK performed
 LogCommit = ✔ Transaction committed (COMMIT)
 LogTestFinished = ℹ Test mode complete — no data was modified.
+
+FieldNumberPerProposal=Number of products per proposal
+# ── Workflows ──────────────────────────────────────────────────────────────────
+Workflow = Workflow
+WorkflowOppClPr = OPP+CL+PR
+WorkflowOppClPrTitle = Workflow OPP+CL+PR (Opportunity + Customer + Proposal)
+HintWorkflowOppClPr = Each run creates a customer, an opportunity (project) linked to that customer, then a commercial proposal attached to the opportunity. The opportunity amount is aligned with the proposal total (excl. tax).
+FieldNbWorkflowRuns = Number of runs
+ColOpportunity = Opportunity
