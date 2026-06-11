@@ -336,6 +336,23 @@ class modDolistream extends DolibarrModules
 			'target'   => '',
 			'user'     => 0,
 		);
+
+		// Left menu — Réglages
+		$this->menu[$r++] = array(
+			'fk_menu'  => 'fk_mainmenu=dolistream',
+			'type'     => 'left',
+			'titre'    => 'Réglages',
+			'prefix'   => img_picto('', 'setup', 'class="pictofixedwidth valignmiddle"'),
+			'mainmenu' => 'dolistream',
+			'leftmenu' => 'dolistream_setup',
+			'url'      => '/dolistream/admin/setup.php',
+			'langs'    => 'dolistream@dolistream',
+			'position' => 1000 + $r,
+			'enabled'  => "isModEnabled('dolistream')",
+			'perms'    => '$user->admin',
+			'target'   => '',
+			'user'     => 0,
+		);
 	}
 
 	/**
