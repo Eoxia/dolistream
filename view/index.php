@@ -1052,10 +1052,15 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 			$proj->ref         = 'LLD-' . date('ym') . '-' . sprintf('%05d', mt_rand(1, 99999));
 			$proj->opp_status  = array_search($oppStatus, $oppStatuses);
 			$proj->opp_percent = $oppStatus['pct'];
-			$proj->datec       = $dates['start'];
+			$proj->date_c      = $dates['start'];
+			$proj->date_start  = $dates['start'];
+			$proj->date_end    = $dates['start'] + mt_rand(30, 365) * 24 * 3600;
+			$proj->statut      = Project::STATUS_VALIDATED;
+			$proj->usage_opportunity = 1;
+			$proj->public      = 1;
+			$proj->fk_user_creat = $fuser->id;
 			$proj->budget_amount = mt_rand(5000, 50000);
 			$proj->opp_amount    = $proj->budget_amount * (mt_rand(80, 120) / 100);
-			$proj->status      = 1;
 			$proj->array_options = array('options_rental_ltrproject' => 2);
 			if ($projectMode === 'linked' && !empty($socids)) {
 				$proj->socid = $socids[array_rand($socids)];
@@ -1065,7 +1070,8 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 				dsLog('✔ #' . $s . ' | ' . $proj->ref . ' | ' . $proj->title . ' | ' . $oppStatus['label'] . ' | ' . number_format((int)$proj->opp_amount, 0, ',', ' ') . ' € | ' . number_format((int)$proj->budget_amount, 0, ',', ' ') . ' €', 'success');
 				$ok++;
 			} else {
-				dsLog('✘ #' . $s . ' — ' . $proj->error, 'error');
+				$errStr = $proj->error ?: (is_array($proj->errors) ? join(', ', $proj->errors) : 'Erreur inconnue');
+				dsLog('✘ #' . $s . ' — ' . $errStr, 'error');
 				$ko++;
 			}
 			if ($s % 5 === 0 || $s === $nb - 1) dolinstreamProgress($s + 1, $nb);
