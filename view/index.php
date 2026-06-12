@@ -1047,21 +1047,25 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 		$ok = $ko = 0;
 		for ($s = 0; $s < $nb; $s++) {
 			$oppStatus = $oppStatuses[array_rand($oppStatuses)];
+			$randDate  = $dates[array_rand($dates)];
 			$proj = new Project($db);
 			$proj->title       = $projectNames[array_rand($projectNames)] . ' - ' . date('ym') . '-' . sprintf('%04d', $s);
 			$proj->ref         = 'LLD-' . date('ym') . '-' . sprintf('%05d', mt_rand(1, 99999));
 			$proj->opp_status  = array_search($oppStatus, $oppStatuses);
 			$proj->opp_percent = $oppStatus['pct'];
-			$proj->date_c      = $dates['start'];
-			$proj->date_start  = $dates['start'];
-			$proj->date_end    = $dates['start'] + mt_rand(30, 365) * 24 * 3600;
+			$proj->date_c      = $randDate;
+			$proj->date_start  = $randDate;
+			$proj->date_end    = $randDate + mt_rand(30, 365) * 24 * 3600;
 			$proj->statut      = Project::STATUS_VALIDATED;
 			$proj->usage_opportunity = 1;
 			$proj->public      = 1;
 			$proj->fk_user_creat = $fuser->id;
 			$proj->budget_amount = mt_rand(5000, 50000);
 			$proj->opp_amount    = $proj->budget_amount * (mt_rand(80, 120) / 100);
-			$proj->array_options = array('options_rental_ltrproject' => 2);
+			$proj->array_options = array(
+				'options_rental_ltrproject' => 2,
+				'options_rental_ltr_sales_billing' => mt_rand(1, 3)
+			);
 			if ($projectMode === 'linked' && !empty($socids)) {
 				$proj->socid = $socids[array_rand($socids)];
 			}
