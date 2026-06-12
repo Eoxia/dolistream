@@ -213,8 +213,8 @@ $dsDbConf = array(
 	),
 	'generate-rental-product' => array(
 		'table'  => 'product',
-		'head'   => array('Réf', 'Label', 'Prix Vente', 'Prix Loc/J'),
-		'select' => "SELECT p.rowid, p.ref, p.label, CONCAT(ROUND(p.price,2),' €') AS vente, CONCAT(ROUND(pe.rental_price,2),' €') AS loc FROM " . MAIN_DB_PREFIX . "product p LEFT JOIN " . MAIN_DB_PREFIX . "product_extrafields pe ON pe.fk_object = p.rowid WHERE pe.rental_product=1 ORDER BY p.rowid DESC LIMIT {NB}",
+		'head'   => array('Réf', 'Label', 'Prix Vente', 'Prix Loc/J', 'Prix Revient Loc/J', 'Infos Loc'),
+		'select' => "SELECT p.rowid, p.ref, p.label, CONCAT(ROUND(p.price,2),' €') AS vente, CONCAT(ROUND(pe.rental_price,2),' €') AS loc, CONCAT(ROUND(pe.rental_costprice,2),' €') AS cost, pe.rental_infos AS infos FROM " . MAIN_DB_PREFIX . "product p LEFT JOIN " . MAIN_DB_PREFIX . "product_extrafields pe ON pe.fk_object = p.rowid WHERE pe.rental_product=1 ORDER BY p.rowid DESC LIMIT {NB}",
 		'url'    => '/product/card.php?id=',
 	),
 	'generate-rental-project' => array(
@@ -681,9 +681,10 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 			$product->label = 'Produit LLD ' . date('ymd-His') . '-' . sprintf('%04d', $s);
 			$product->array_options = array(
 				'options_rental_product' => 1,
-				'options_rental_label' => $product->label . '-location',
+				'options_rental_label' => $product->ref . '-location',
 				'options_rental_price' => round($sellPrice * ($rentalRatio / 100), 2),
 				'options_rental_costprice' => round($costPrice * ($rentalRatio / 100), 2),
+				'options_rental_infos' => 'Produit de location généré automatiquement.'
 			);
 			$ret = $product->create($fuser);
 			if ($ret < 0) {
@@ -692,7 +693,7 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 				continue;
 			}
 			$_nextFallbackNum++;
-			dsLog('✓ #' . ($s + 1) . ' | id=' . $product->id . ' | ' . $product->ref . ' | ' . $product->label . ' | ' . $product->price . ' € | ' . $product->array_options['options_rental_price'] . ' €/j', 'success');
+			dsLog('✓ #' . ($s + 1) . ' | id=' . $product->id . ' | ' . $product->ref . ' | ' . $product->label . ' | ' . $product->price . ' € | ' . $product->array_options['options_rental_price'] . ' €/j | ' . $product->array_options['options_rental_costprice'] . ' €/j | ' . $product->array_options['options_rental_infos'], 'success');
 			$ok++;
 		}
 		dsLog('═ ' . $ok . ' OK, ' . $ko . ' erreur(s) ═');
@@ -2320,6 +2321,27 @@ foreach ($scriptLog as $entry) {
             $cells = array(
                 $makeLink('propal', $m[1], '/comm/propal/card.php?id='),
                 $resolveSoc((int)$m[2]), $m[3], $m[4] . ' €',
+            );
+        }
+
+    // ── generate-rental-product ─────────────────────────────────────────────
+    } elseif ($activeScript === 'generate-rental-product') {
+        // ✓ #N | id=11 | PRD | Label | 15.00 € | 0.75 €/j | 0.45 €/j | Infos
+        if (preg_match('/\| id=(\d+) \| (\S+) \| (.+?) \| ([\d\.]+ \S+) \| ([\d\.]+ \S+) \| ([\d\.]+ \S+) \| (.+)/', $msg, $m)) {
+            $cells = array(
+                $makeLink('product', $m[2], '/product/card.php?id=' . $m[1]),
+                trim($m[3]), $m[4], $m[5], $m[6], trim($m[7])
+            );
+        }
+
+    // ── generate-rental-project ─────────────────────────────────────────────
+    } elseif ($activeScript === 'generate-rental-project') {
+        if (preg_match('/\| (\S+) \| (.+?) \| (.+?) \| ([\d ]+) €\S* \| ([\d ]+)/', $msg, $m)) {
+            $cells = array(
+                $makeLink('projet', $m[1], '/projet/card.php?id='),
+                trim($m[2]), trim($m[3]),
+                str_replace(' ', '', $m[4]) . ' €',
+                str_replace(' ', '', $m[5]) . ' €',
             );
         }
 
