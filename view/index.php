@@ -1029,7 +1029,7 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 	// ════════════════════════════════════════════════════════════════════════
 	} elseif ($script === 'generate-rental-project') {
 	// ════════════════════════════════════════════════════════════════════════
-		$projectMode = in_array($mode, array('free', 'linked')) ? $mode : 'free';
+		$projectMode = in_array($mode, array('free', 'linked')) ? $mode : 'linked';
 		$dateStartInput = GETPOST('date_start', 'alpha');
 		$baseTs = !empty($dateStartInput) ? strtotime($dateStartInput) : strtotime('-1 year');
 		$salesBilling = (int) GETPOST('sales_billing', 'int') ?: 3;
@@ -2104,13 +2104,12 @@ $scriptDefs = array(
 			array('name' => 'nb', 'label' => 'Nombre à générer', 'type' => 'number', 'default' => 10, 'min' => 1, 'max' => 2000),
 			array(
 				'name'    => 'mode',
-				'label'   => 'Mode (Lié/Libre)',
+				'label'   => 'Tiers',
 				'type'    => 'select',
 				'options' => array(
-					'free'   => 'Projet libre (sans tiers)',
 					'linked' => 'Lié à un tiers aléatoire',
 				),
-				'default' => 'free',
+				'default' => 'linked',
 			),
 			array(
 				'name'    => 'date_start',
