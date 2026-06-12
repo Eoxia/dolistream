@@ -1102,6 +1102,78 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 		dsLog('─── ' . $ok . ' OK, ' . $ko . ' erreur(s) ───');
 
 	// ════════════════════════════════════════════════════════════════════════
+	} elseif ($script === 'generate-rental-order') {
+	// ════════════════════════════════════════════════════════════════════════
+		$fk_project = GETPOST('fk_project', 'int');
+		$product_ids = GETPOST('product_ids', 'array');
+		
+		if (empty($fk_project)) { dsLog('❌ Projet non sélectionné', 'error'); goto render; }
+		if (empty($product_ids)) { dsLog('❌ Aucun produit sélectionné', 'error'); goto render; }
+
+		$project = new Project($db);
+		if ($project->fetch($fk_project) <= 0) { dsLog('❌ Projet introuvable', 'error'); goto render; }
+		if (empty($project->socid)) { dsLog('❌ Le projet sélectionné doit être lié à un tiers', 'error'); goto render; }
+		
+		$dates = dolinstreamGetRandomDates();
+		dsLog('Générer des commandes de location : ' . $nb);
+		$ok = $ko = 0;
+
+		for ($s = 0; $s < $nb; $s++) {
+			$obj = new Commande($db);
+			$obj->socid = $project->socid;
+			$obj->date_commande = $dates[array_rand($dates)];
+			$obj->note_private = 'Commande de location générée par DoliStream';
+			$obj->source = 1;
+			$obj->fk_project = $project->id;
+			$obj->remise_percent = 0;
+			$obj->shipping_method_id = mt_rand(1, 2);
+			$obj->cond_reglement_id = mt_rand(1, 3);
+			$obj->availability_id = mt_rand(0, 1);
+
+			$result = $obj->create($fuser);
+			if ($result >= 0) {
+				$lineOk = true;
+				foreach ($product_ids as $pid) {
+					$product = new Product($db);
+					if ($product->fetch($pid) > 0) {
+						$r = $obj->addline(
+							$product->description,
+							$product->price,
+							mt_rand(1, 5),
+							$product->tva_tx ?? 20,
+							0, 0,
+							$pid,
+							0, 0, 0,
+							$product->price_base_type,
+							$product->price_ttc,
+							'', '',
+							$product->type
+						);
+						if ($r < 0) { $lineOk = false; break; }
+					}
+				}
+				if ($lineOk) {
+					$obj->fetch($obj->id);
+					$obj->fetch_thirdparty();
+					$obj->valid($fuser);
+					dsLog('✔ #' . $s . ' | ' . $obj->ref . ' | Projet: ' . $project->ref . ' | ' . count($product_ids) . ' produit(s) | ' . htmlspecialchars($obj->thirdparty->nom) . ' | ' . dol_print_date($obj->date_commande, 'day') . ' | ' . number_format((float)$obj->total_ht, 2, ',', ' ') . ' €', 'success');
+					$ok++;
+				} else {
+					$obj->delete($fuser);
+					dsLog('✘ #' . $s . ' — Erreur lors de l\'ajout des lignes. Commande annulée.', 'error');
+					$ko++;
+				}
+			} else {
+				$errStr = $obj->error ?: (is_array($obj->errors) ? join(', ', $obj->errors) : 'Erreur inconnue');
+				dsLog('✘ #' . $s . ' — ' . $errStr, 'error');
+				$ko++;
+			}
+			if ($s % 5 === 0 || $s === $nb - 1) dolinstreamProgress($s + 1, $nb);
+		}
+		dolinstreamProgress($nb, $nb, true);
+		dsLog('─── ' . $ok . ' OK, ' . $ko . ' erreur(s) ───');
+
+	// ════════════════════════════════════════════════════════════════════════
 	} elseif ($script === 'workflow-opp-cl-pr') {
 	// ════════════════════════════════════════════════════════════════════════
 		// Workflow : chaque itération crée ① un client ② une opportunité liée
@@ -2148,6 +2220,27 @@ $scriptDefs = array(
 			)
 		),
 	),
+	'generate-rental-order' => array(
+		'label'   => 'Générer Commande Loc',
+		'icon'    => 'order',
+		'hint'    => 'Génère des commandes de location associées à un projet LLD sélectionné.',
+		'danger'  => false,
+		'perm'    => 'generate',
+		'columns' => array('Réf Commande', 'Projet LLD', 'Nb Produits', 'Tiers', 'Date', 'Montant HT'),
+		'fields'  => array(
+			array('name' => 'nb', 'label' => 'Nombre à générer', 'type' => 'number', 'default' => 1, 'min' => 1, 'max' => 50),
+			array(
+				'name'    => 'fk_project',
+				'label'   => 'Projet de location',
+				'type'    => 'select_rental_project',
+			),
+			array(
+				'name'    => 'product_ids',
+				'label'   => 'Produits de location',
+				'type'    => 'multiselect_rental_product',
+			)
+		),
+	),
 	'purge-data' => array(
 		'label'   => $langs->transnoentitiesnoconv('PurgeData'),
 		'icon'    => 'delete',
@@ -2390,6 +2483,18 @@ foreach ($scriptLog as $entry) {
                 trim($m[2]), trim($m[3]),
                 str_replace(' ', '', $m[4]) . ' €',
                 str_replace(' ', '', $m[5]) . ' €',
+            );
+        }
+
+    // ── generate-rental-order ───────────────────────────────────────────────
+    } elseif ($activeScript === 'generate-rental-order') {
+        // ✔ #0 | CMD-001 | Projet: PRJ-001 | 2 produit(s) | Tiers Name | 12/06/2025 | 1 500,00 €
+        if (preg_match('/\| (\S+) \| Projet: (\S+) \| (.+?) \| (.+?) \| (.+?) \| (.+) €/', $msg, $m)) {
+            $cells = array(
+                $makeLink('commande', $m[1], '/commande/card.php?ref='),
+                $makeLink('projet', $m[2], '/projet/card.php?ref='),
+                trim($m[3]), trim($m[4]), trim($m[5]),
+                str_replace(' ', '', trim($m[6])) . ' €'
             );
         }
 
@@ -2672,6 +2777,44 @@ print dol_get_fiche_head($head, $activeTab, 'DoliStream', -1, 'technic');
               if (typeof jQuery !== 'undefined' && jQuery.fn.select2) {
                 jQuery('#ds-fld-<?php print $field['name']; ?>').select2({
                   placeholder: "Sélectionnez des tiers...",
+                  width: '300px'
+                });
+              }
+            });
+          </script>
+        <?php elseif ($field['type'] === 'select_rental_project'): ?>
+          <select name="<?php print $field['name']; ?>" id="ds-fld-<?php print $field['name']; ?>" class="flat" required style="min-width:300px; max-width:500px;">
+            <option value="">-- Sélectionnez un projet LLD --</option>
+          <?php
+            global $db;
+            $res = $db->query("SELECT rowid, ref, title FROM " . MAIN_DB_PREFIX . "projet WHERE statut > 0 ORDER BY rowid DESC LIMIT 100");
+            while ($res && $obj = $db->fetch_object($res)) {
+              print '<option value="'.$obj->rowid.'">'.htmlspecialchars($obj->ref . ' - ' . $obj->title).'</option>';
+            }
+          ?>
+          </select>
+          <script>
+            document.addEventListener('DOMContentLoaded', function() {
+              if (typeof jQuery !== 'undefined' && jQuery.fn.select2) {
+                jQuery('#ds-fld-<?php print $field['name']; ?>').select2({ width: '300px' });
+              }
+            });
+          </script>
+        <?php elseif ($field['type'] === 'multiselect_rental_product'): ?>
+          <select name="<?php print $field['name']; ?>[]" id="ds-fld-<?php print $field['name']; ?>" class="flat" multiple="multiple" required style="min-width:300px; max-width:500px;">
+          <?php
+            global $db;
+            $res = $db->query("SELECT rowid, ref, label FROM " . MAIN_DB_PREFIX . "product WHERE tosell=1 ORDER BY ref DESC LIMIT 200");
+            while ($res && $obj = $db->fetch_object($res)) {
+              print '<option value="'.$obj->rowid.'">'.htmlspecialchars($obj->ref . ' - ' . $obj->label).'</option>';
+            }
+          ?>
+          </select>
+          <script>
+            document.addEventListener('DOMContentLoaded', function() {
+              if (typeof jQuery !== 'undefined' && jQuery.fn.select2) {
+                jQuery('#ds-fld-<?php print $field['name']; ?>').select2({
+                  placeholder: "Sélectionnez des produits...",
                   width: '300px'
                 });
               }
