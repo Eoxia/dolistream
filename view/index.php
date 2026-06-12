@@ -1030,6 +1030,10 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 	} elseif ($script === 'generate-rental-project') {
 	// ════════════════════════════════════════════════════════════════════════
 		$projectMode = in_array($mode, array('free', 'linked')) ? $mode : 'free';
+		$dateStartInput = GETPOST('date_start', 'alpha');
+		$baseTs = !empty($dateStartInput) ? strtotime($dateStartInput) : strtotime('-1 year');
+		$salesBilling = (int) GETPOST('sales_billing', 'int') ?: 3;
+
 		$socids      = ($projectMode === 'linked') ? dolinstreamGetClientIds($db) : array();
 		if ($projectMode === 'linked' && empty($socids)) {
 			dsLog('❌ ' . $langs->transnoentitiesnoconv('NoClientThirdparty') . ' (mode lié)', 'error');
@@ -1043,20 +1047,20 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 			5 => array('code' => 'WON',   'label' => 'Gagné',          'pct' => 100),
 		);
 		$projectNames = array('Location Longue Durée Flotte Auto', 'LLD Matériel Chantier', 'Location Informatique 36 mois', 'Contrat LLD Équipement BTP', 'Pack LLD Serveurs', 'Location Nacelles Élévatrices');
-		$dates = dolinstreamGetRandomDates();
+		
 		$ok = $ko = 0;
 		for ($s = 0; $s < $nb; $s++) {
 			$oppStatus = $oppStatuses[array_rand($oppStatuses)];
-			$randDate  = $dates[array_rand($dates)];
+			$randDate  = $baseTs + mt_rand(0, 5 * 24 * 3600);
 			$proj = new Project($db);
-			$proj->title       = $projectNames[array_rand($projectNames)] . ' - ' . date('ym') . '-' . sprintf('%04d', $s);
-			$proj->ref         = 'LLD-' . date('ym') . '-' . sprintf('%05d', mt_rand(1, 99999));
+			$proj->title       = $projectNames[array_rand($projectNames)] . ' - ' . date('ym', $randDate) . '-' . sprintf('%04d', $s);
+			$proj->ref         = 'LLD-' . date('ym', $randDate) . '-' . sprintf('%05d', mt_rand(1, 99999));
 			$proj->opp_status  = array_search($oppStatus, $oppStatuses);
 			$proj->opp_percent = $oppStatus['pct'];
 			$proj->date_c      = $randDate;
 			$proj->date_start  = $randDate;
 			$proj->date_end    = $randDate + mt_rand(30, 365) * 24 * 3600;
-			$proj->statut      = Project::STATUS_VALIDATED;
+			$proj->statut      = Project::STATUS_DRAFT;
 			$proj->usage_opportunity = 1;
 			$proj->public      = 1;
 			$proj->fk_user_creat = $fuser->id;
@@ -1064,7 +1068,7 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 			$proj->opp_amount    = $proj->budget_amount * (mt_rand(80, 120) / 100);
 			$proj->array_options = array(
 				'options_rental_ltrproject' => 2,
-				'options_rental_ltr_sales_billing' => mt_rand(1, 3)
+				'options_rental_ltr_sales_billing' => $salesBilling
 			);
 			if ($projectMode === 'linked' && !empty($socids)) {
 				$proj->socid = $socids[array_rand($socids)];
@@ -2108,6 +2112,23 @@ $scriptDefs = array(
 				),
 				'default' => 'free',
 			),
+			array(
+				'name'    => 'date_start',
+				'label'   => 'Date de début',
+				'type'    => 'date',
+				'default' => date('Y-m-d', strtotime('-1 year'))
+			),
+			array(
+				'name'    => 'sales_billing',
+				'label'   => 'Facturation LLD',
+				'type'    => 'select',
+				'options' => array(
+					'1' => 'Facture mensuelle',
+					'2' => 'Depuis l\'onglet LLD',
+					'3' => 'Facturation manuelle',
+				),
+				'default' => '3'
+			)
 		),
 	),
 	'purge-data' => array(
@@ -2625,6 +2646,9 @@ print dol_get_fiche_head($head, $activeTab, 'DoliStream', -1, 'technic');
           <input type="number" name="<?php print $field['name']; ?>" id="ds-fld-<?php print $field['name']; ?>" class="flat" style="width:70px;"
             value="<?php print (int)($field['default'] ?? 10); ?>"
             min="<?php print $field['min'] ?? 1; ?>" max="<?php print $field['max'] ?? 100000; ?>" required>
+        <?php elseif ($field['type'] === 'date'): ?>
+          <input type="date" name="<?php print $field['name']; ?>" id="ds-fld-<?php print $field['name']; ?>" class="flat"
+            value="<?php print htmlspecialchars($field['default'] ?? ''); ?>" required>
         <?php else: ?>
           <input type="text" name="<?php print $field['name']; ?>" class="flat minwidth200"
             value="<?php print htmlspecialchars($field['default'] ?? ''); ?>"
