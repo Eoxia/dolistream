@@ -211,6 +211,30 @@ $dsDbConf = array(
 		'select' => "SELECT l.rowid, l.ref, s.nom AS tiers, DATE_FORMAT(l.date_creation,'%d/%m/%Y') AS date_crea, IF(l.statut=0,'Brouillon','Validé') AS statut FROM " . MAIN_DB_PREFIX . "loc_location l LEFT JOIN " . MAIN_DB_PREFIX . "societe s ON s.rowid=l.fk_soc ORDER BY l.rowid DESC LIMIT {NB}",
 		'url'    => '/rental/card.php?id=',
 	),
+	'generate-rental-product' => array(
+		'table'  => 'product',
+		'head'   => array('Label', 'Prix Vente', 'Prix Loc/J', 'Prix Revient Loc/J', 'Infos Loc'),
+		'select' => "SELECT p.rowid, p.ref, p.label, CONCAT(ROUND(p.price,2),' €') AS vente, CONCAT(ROUND(pe.rental_price,2),' €') AS loc, CONCAT(ROUND(pe.rental_costprice,2),' €') AS cost, pe.rental_infos AS infos FROM " . MAIN_DB_PREFIX . "product p LEFT JOIN " . MAIN_DB_PREFIX . "product_extrafields pe ON pe.fk_object = p.rowid WHERE pe.rental_product=1 ORDER BY p.rowid DESC LIMIT {NB}",
+		'url'    => '/product/card.php?id=',
+	),
+	'generate-rental-project' => array(
+		'table'  => 'projet',
+		'head'   => array('Titre', 'Statut', 'Montant', 'Budget', 'Nb Entrepôts', 'Factures Réc.'),
+		'select' => "SELECT p.rowid, p.ref, p.title, IFNULL(ps.code,'-') AS opp_statut, CONCAT(ROUND(p.opp_amount,2),' €') AS opp_mnt, CONCAT(ROUND(p.budget_amount,2),' €') AS budget, (SELECT COUNT(*) FROM " . MAIN_DB_PREFIX . "entrepot WHERE fk_project=p.rowid) AS nb_wh, (SELECT COUNT(*) FROM " . MAIN_DB_PREFIX . "facture_rec WHERE fk_projet=p.rowid) AS nb_rec FROM " . MAIN_DB_PREFIX . "projet p LEFT JOIN " . MAIN_DB_PREFIX . "c_lead_status ps ON ps.rowid=p.fk_opp_status LEFT JOIN " . MAIN_DB_PREFIX . "projet_extrafields pe ON pe.fk_object = p.rowid WHERE pe.rental_ltrproject=2 ORDER BY p.rowid DESC LIMIT {NB}",
+		'url'    => '/projet/card.php?id=',
+	),
+	'generate-rental-order' => array(
+		'table'  => 'commande',
+		'head'   => array('Projet LLD', 'Nb Produits', 'Tiers', 'Date', 'Reste à livrer', 'Montant HT'),
+		'select' => "SELECT c.rowid, c.ref, IFNULL(pj.ref,'-') AS projet, (SELECT COUNT(*) FROM " . MAIN_DB_PREFIX . "commandedet WHERE fk_commande=c.rowid) AS nb_prod, s.nom AS tiers, DATE_FORMAT(c.date_commande,'%d/%m/%Y') AS date_c, (SELECT SUM(cd.qty) - COALESCE((SELECT SUM(ed.qty) FROM " . MAIN_DB_PREFIX . "expeditiondet ed JOIN " . MAIN_DB_PREFIX . "expedition e ON e.rowid=ed.fk_expedition WHERE ed.fk_elementdet = cd.rowid AND e.fk_statut > 0), 0) FROM " . MAIN_DB_PREFIX . "commandedet cd WHERE cd.fk_commande = c.rowid) AS reste_livrer, CONCAT(ROUND(c.total_ht,2),' €') AS ht FROM " . MAIN_DB_PREFIX . "commande c LEFT JOIN " . MAIN_DB_PREFIX . "societe s ON s.rowid=c.fk_soc LEFT JOIN " . MAIN_DB_PREFIX . "projet pj ON pj.rowid=c.fk_projet WHERE c.source=1 ORDER BY c.rowid DESC LIMIT {NB}",
+		'url'    => '/commande/card.php?ref=',
+	),
+	'generate-rental-shipping' => array(
+		'table'  => 'expedition',
+		'head'   => array('Commande', 'Projet LLD', 'Tiers', 'Qté Expédiée'),
+		'select' => "SELECT e.rowid, e.ref, IFNULL(c.ref,'-') AS commande, IFNULL(pj.ref,'-') AS projet, s.nom AS tiers, (SELECT SUM(qty) FROM " . MAIN_DB_PREFIX . "expeditiondet WHERE fk_expedition=e.rowid) AS qte FROM " . MAIN_DB_PREFIX . "expedition e LEFT JOIN " . MAIN_DB_PREFIX . "element_element ee ON ee.fk_target=e.rowid AND ee.targettype='shipping' AND ee.sourcetype='commande' LEFT JOIN " . MAIN_DB_PREFIX . "commande c ON c.rowid=ee.fk_source LEFT JOIN " . MAIN_DB_PREFIX . "societe s ON s.rowid=e.fk_soc LEFT JOIN " . MAIN_DB_PREFIX . "projet pj ON pj.rowid=c.fk_projet ORDER BY e.rowid DESC LIMIT {NB}",
+		'url'    => '/expedition/card.php?id=',
+	),
 );
 $preExecMaxRowid = 0;
 
@@ -643,8 +667,54 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 			$ok++;
 		}
 		dsLog('═ ' . $ok . ' OK, ' . $ko . ' erreur(s) ═');
+	} elseif ($script === 'generate-rental-product') {
+	// ════════════════════════════════════════════════════════════════════════
+		$rentalRatio = max(1, (int)(GETPOST('rental_ratio', 'int') ?: 5));
+		$_refDateBase = date('ym');
+		$_lastRefNum = 0;
+		$_rRes = $db->query('SELECT MAX(rowid) AS m FROM ' . MAIN_DB_PREFIX . 'product');
+		if ($_rRes && ($_rRow = $db->fetch_object($_rRes))) $_lastRefNum = (int)$_rRow->m;
+		$_nextFallbackNum = $_lastRefNum + 1;
+		$ok = $ko = 0;
+		for ($s = 0; $s < $nb; $s++) {
+			$product = new Product($db);
+			$product->type = 0;
+			$product->status = 1;
+			$product->status_buy = 1;
+			$product->finished = 0;
+			$product->stockable_product = 1;
+			$product->description = 'Généré automatiquement par DoliStream (Location).';
+			$sellPrice = round(mt_rand(50000, 999900) / 100, 2);
+			$costPrice = round($sellPrice * 0.6, 2);
+			$product->price = $sellPrice;
+			$product->cost_price = $costPrice;
+			$product->tva_tx = '20.000';
+			$product->ref = 'PRDL-' . $_refDateBase . '-' . sprintf('%05d', $_nextFallbackNum);
+			$product->label = 'Produit LLD ' . date('ymd-His') . '-' . sprintf('%04d', $s);
+			$product->array_options = array(
+				'options_rental_product' => 1,
+				'options_rental_label' => $product->ref . '-location',
+				'options_rental_price' => round($sellPrice * ($rentalRatio / 100), 2),
+				'options_rental_costprice' => round($costPrice * ($rentalRatio / 100), 2),
+				'options_rental_infos' => 'Produit de location généré automatiquement.'
+			);
+			$ret = $product->create($fuser);
+			if ($ret < 0) {
+				dsLog('✗ #' . ($s + 1) . ' — ' . $product->error, 'error');
+				$ko++;
+				continue;
+			}
+			$_nextFallbackNum++;
+			dsLog('✓ #' . ($s + 1) . ' | id=' . $product->id . ' | ' . $product->ref . ' | ' . $product->label . ' | ' . $product->price . ' € | ' . $product->array_options['options_rental_price'] . ' €/j | ' . $product->array_options['options_rental_costprice'] . ' €/j | ' . $product->array_options['options_rental_infos'], 'success');
+			$ok++;
+		}
+		dsLog('═ ' . $ok . ' OK, ' . $ko . ' erreur(s) ═');
 	} elseif ($script === 'generate-invoice') {
 	// ════════════════════════════════════════════════════════════════════════
+		$date_start   = GETPOST('date_start', 'alpha') ?: date('Y-m-01');
+		$date_end     = GETPOST('date_end', 'alpha') ?: date('Y-m-t');
+		$nb_per_month = max(1, (int) GETPOST('nb_per_month', 'int'));
+
 		$socids  = dolinstreamGetClientIds($db);
 		$prodids = dolinstreamGetProductIds($db);
 
@@ -657,14 +727,46 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 			goto render;
 		}
 
-		$dates = dolinstreamGetRandomDates();
-		dsLog($langs->transnoentities('GenerateInvoices') . ' : ' . $nb . ' (' . count($socids) . ' tiers, ' . count($prodids) . ' produits)');
+		// Générer les dates par mois
+		$start = new DateTime($date_start);
+		$end   = new DateTime($date_end);
+		
+		$dates = array();
+		if ($start <= $end) {
+			$interval = DateInterval::createFromDateString('1 month');
+			$period = new DatePeriod(
+				(clone $start)->modify('first day of this month'),
+				$interval,
+				(clone $end)->modify('first day of next month')
+			);
+
+			foreach ($period as $dt) {
+				$m_start = max(new DateTime($date_start), $dt);
+				$m_end   = min(new DateTime($date_end), (clone $dt)->modify('last day of this month'));
+				
+				$start_ts = $m_start->getTimestamp();
+				$end_ts   = $m_end->getTimestamp();
+				if ($start_ts > $end_ts) continue; // Sécurité
+				
+				for ($i = 0; $i < $nb_per_month; $i++) {
+					$dates[] = mt_rand($start_ts, $end_ts);
+				}
+			}
+		}
+
+		$total_invoices = count($dates);
+		if ($total_invoices === 0) {
+			dsLog('❌ Période invalide ou aucun mois trouvé.', 'error');
+			goto render;
+		}
+
+		dsLog($langs->transnoentities('GenerateInvoices') . ' : ' . $total_invoices . ' (' . count($socids) . ' tiers, ' . count($prodids) . ' produits)');
 		$ok = $ko = 0;
 
-		for ($i = 0; $i < $nb; $i++) {
+		foreach ($dates as $idx => $inv_date) {
 			$obj                    = new Facture($db);
 			$obj->socid             = $socids[array_rand($socids)];
-			$obj->date              = $dates[array_rand($dates)];
+			$obj->date              = $inv_date;
 			$obj->cond_reglement_id = 3;
 			$obj->mode_reglement_id = 3;
 
@@ -702,17 +804,20 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 				if ($lineOk && $obj->validate($fuser) > 0) {
 					$ht  = price2num($obj->total_ht, 'MT');
 					$ttc = price2num($obj->total_ttc, 'MT');
-					dsLog('✔ #' . $i . ' | ' . $obj->ref . ' | soc=' . $obj->socid . ' | ' . dol_print_date($obj->date, 'day') . ' | HT=' . $ht . ' | TTC=' . $ttc, 'success');
+					dsLog('✔ #' . $idx . ' | ' . $obj->ref . ' | soc=' . $obj->socid . ' | ' . dol_print_date($obj->date, 'day') . ' | HT=' . $ht . ' | TTC=' . $ttc, 'success');
 					$ok++;
 				} else {
-					dsLog('✘ #' . $i . ' — validation : ' . $obj->error, 'error');
+					dsLog('✘ #' . $idx . ' — validation : ' . $obj->error, 'error');
 					$ko++;
 				}
 			} else {
-				dsLog('✘ #' . $i . ' — création : ' . $obj->error, 'error');
+				dsLog('✘ #' . $idx . ' — création : ' . $obj->error, 'error');
 				$ko++;
 			}
+			
+			if ($idx % 5 === 0 || $idx === $total_invoices - 1) dolinstreamProgress($idx + 1, $total_invoices);
 		}
+		dolinstreamProgress($total_invoices, $total_invoices, true);
 		dsLog('─── ' . $ok . ' OK, ' . $ko . ' erreur(s) ───');
 
 	// ════════════════════════════════════════════════════════════════════════
@@ -971,6 +1076,274 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 		}
 		dolinstreamProgress($nb, $nb, true); // marque terminé
 		dsLog('─── ' . $ok . ' OK, ' . $ko . ' erreur(s) ───');
+
+	// ════════════════════════════════════════════════════════════════════════
+	} elseif ($script === 'generate-rental-project') {
+	// ════════════════════════════════════════════════════════════════════════
+		$dateStartInput = GETPOST('date_start', 'alpha');
+		$baseTs = !empty($dateStartInput) ? strtotime($dateStartInput) : strtotime('-1 year');
+		$salesBilling = (int) GETPOST('sales_billing', 'int') ?: 3;
+		$nbWh = max(0, (int) GETPOST('nb_wh', 'int'));
+
+		$socids      = GETPOST('socids', 'array');
+		if (empty($socids)) {
+			dsLog('❌ ' . $langs->transnoentitiesnoconv('NoClientThirdparty') . ' (tiers obligatoire)', 'error');
+			goto render;
+		}
+		$oppStatuses = array(
+			1 => array('code' => 'PROSP', 'label' => 'Prospection',   'pct' => mt_rand(10, 25)),
+			2 => array('code' => 'QUAL',  'label' => 'Qualifié',       'pct' => mt_rand(25, 45)),
+			3 => array('code' => 'PROP',  'label' => 'Proposition',    'pct' => mt_rand(40, 65)),
+			4 => array('code' => 'NEGO',  'label' => 'Négociation',    'pct' => mt_rand(60, 85)),
+			5 => array('code' => 'WON',   'label' => 'Gagné',          'pct' => 100),
+		);
+		$projectNames = array('Location Longue Durée Flotte Auto', 'LLD Matériel Chantier', 'Location Informatique 36 mois', 'Contrat LLD Équipement BTP', 'Pack LLD Serveurs', 'Location Nacelles Élévatrices');
+		
+		$ok = $ko = 0;
+		for ($s = 0; $s < $nb; $s++) {
+			$oppStatus = $oppStatuses[array_rand($oppStatuses)];
+			$randDate  = $baseTs + mt_rand(0, 5 * 24 * 3600);
+			$proj = new Project($db);
+			$proj->title       = $projectNames[array_rand($projectNames)] . ' - ' . date('ym', $randDate) . '-' . sprintf('%04d', $s);
+			$proj->ref         = 'LLD-' . date('ym', $randDate) . '-' . sprintf('%05d', mt_rand(1, 99999));
+			$proj->opp_status  = array_search($oppStatus, $oppStatuses);
+			$proj->opp_percent = $oppStatus['pct'];
+			$proj->date_c      = $randDate;
+			$proj->date_start  = $randDate;
+			$proj->date_end    = $randDate + mt_rand(30, 365) * 24 * 3600;
+			$proj->statut      = Project::STATUS_DRAFT;
+			$proj->usage_opportunity = 1;
+			$proj->public      = 1;
+			$proj->fk_user_creat = $fuser->id;
+			$proj->budget_amount = mt_rand(5000, 50000);
+			$proj->opp_amount    = $proj->budget_amount * (mt_rand(80, 120) / 100);
+			$proj->array_options = array(
+				'options_rental_ltrproject' => 2,
+				'options_rental_ltr_sales_billing' => $salesBilling
+			);
+			if (!empty($socids)) {
+				$proj->socid = $socids[array_rand($socids)];
+			}
+			$result = $proj->create($fuser);
+			if ($result > 0) {
+				if ($nbWh > 0) {
+					require_once DOL_DOCUMENT_ROOT . '/product/stock/class/entrepot.class.php';
+					for ($w = 1; $w <= $nbWh; $w++) {
+						$wh = new Entrepot($db);
+						$wh->ref = $proj->ref . '-WH' . sprintf('%02d', $w);
+						$wh->label = 'Entrepôt LLD ' . $proj->ref . ' - ' . $w;
+						$wh->description = 'Généré automatiquement et lié au projet ' . $proj->ref;
+						$wh->lieu = 'Sur site';
+						$wh->statut = 1;
+						$wh->fk_project = $proj->id;
+						$wh->create($fuser);
+					}
+				}
+				$sql = "SELECT COUNT(*) as nb FROM ".MAIN_DB_PREFIX."facture_rec WHERE fk_projet = ".$proj->id;
+				$resRec = $db->query($sql);
+				$nbRec = ($resRec && $objRec = $db->fetch_object($resRec)) ? $objRec->nb : 0;
+
+				$sql = "SELECT COUNT(*) as nb FROM ".MAIN_DB_PREFIX."entrepot WHERE fk_project = ".$proj->id;
+				$resWh = $db->query($sql);
+				$nbWhActual = ($resWh && $objWh = $db->fetch_object($resWh)) ? $objWh->nb : 0;
+
+				dsLog('✔ #' . $s . ' | ' . $proj->ref . ' | ' . $proj->title . ' | ' . $oppStatus['label'] . ' | ' . number_format((int)$proj->opp_amount, 0, ',', ' ') . ' € | ' . number_format((int)$proj->budget_amount, 0, ',', ' ') . ' € | ' . $nbWhActual . ' | ' . $nbRec, 'success');
+				$ok++;
+			} else {
+				$errStr = $proj->error ?: (is_array($proj->errors) ? join(', ', $proj->errors) : 'Erreur inconnue');
+				dsLog('✘ #' . $s . ' — ' . $errStr, 'error');
+				$ko++;
+			}
+			if ($s % 5 === 0 || $s === $nb - 1) dolinstreamProgress($s + 1, $nb);
+		}
+		dolinstreamProgress($nb, $nb, true);
+		dsLog('─── ' . $ok . ' OK, ' . $ko . ' erreur(s) ───');
+
+	// ════════════════════════════════════════════════════════════════════════
+	} elseif ($script === 'generate-rental-order') {
+	// ════════════════════════════════════════════════════════════════════════
+		$fk_project = GETPOST('fk_project', 'int');
+		$product_ids = GETPOST('product_ids', 'array');
+		$qty_mode = GETPOST('qty_mode', 'alpha');
+		$qty_val  = max(1, GETPOST('qty_val', 'int'));
+		
+		if (empty($fk_project)) { dsLog('❌ Projet non sélectionné', 'error'); goto render; }
+		if (empty($product_ids)) { dsLog('❌ Aucun produit sélectionné', 'error'); goto render; }
+
+		$project = new Project($db);
+		if ($project->fetch($fk_project) <= 0) { dsLog('❌ Projet introuvable', 'error'); goto render; }
+		if (empty($project->socid)) { dsLog('❌ Le projet sélectionné doit être lié à un tiers', 'error'); goto render; }
+		
+		$dates = dolinstreamGetRandomDates();
+		dsLog('Générer des commandes de location : ' . $nb);
+		$ok = $ko = 0;
+
+		for ($s = 0; $s < $nb; $s++) {
+			$obj = new Commande($db);
+			$obj->socid = $project->socid;
+			$obj->date_commande = $dates[array_rand($dates)];
+			$obj->note_private = 'Commande de location générée par DoliStream';
+			$obj->source = 1;
+			$obj->fk_project = $project->id;
+			$obj->remise_percent = 0;
+			$obj->shipping_method_id = mt_rand(1, 2);
+			$obj->cond_reglement_id = mt_rand(1, 3);
+			$obj->availability_id = mt_rand(0, 1);
+
+			$result = $obj->create($fuser);
+			if ($result >= 0) {
+				$lineOk = true;
+				foreach ($product_ids as $pid) {
+					$product = new Product($db);
+					if ($product->fetch($pid) > 0) {
+						$qty = ($qty_mode === 'random') ? mt_rand(1, $qty_val) : $qty_val;
+						$r = $obj->addline(
+							$product->description,
+							$product->price,
+							$qty,
+							$product->tva_tx ?? 20,
+							0, 0,
+							$pid,
+							0, 0, 0,
+							$product->price_base_type,
+							$product->price_ttc,
+							'', '',
+							$product->type
+						);
+						if ($r < 0) { $lineOk = false; break; }
+					}
+				}
+				if ($lineOk) {
+					$obj->fetch($obj->id);
+					$obj->fetch_thirdparty();
+					$obj->valid($fuser);
+					dsLog('✔ #' . $s . ' | ' . $obj->ref . ' | Projet: ' . $project->ref . ' | ' . count($product_ids) . ' produit(s) | ' . htmlspecialchars($obj->thirdparty->nom) . ' | ' . dol_print_date($obj->date_commande, 'day') . ' | ' . number_format((float)$obj->total_ht, 2, ',', ' ') . ' €', 'success');
+					$ok++;
+				} else {
+					$obj->delete($fuser);
+					dsLog('✘ #' . $s . ' — Erreur lors de l\'ajout des lignes. Commande annulée.', 'error');
+					$ko++;
+				}
+			} else {
+				$errStr = $obj->error ?: (is_array($obj->errors) ? join(', ', $obj->errors) : 'Erreur inconnue');
+				dsLog('✘ #' . $s . ' — ' . $errStr, 'error');
+				$ko++;
+			}
+			if ($s % 5 === 0 || $s === $nb - 1) dolinstreamProgress($s + 1, $nb);
+		}
+		dolinstreamProgress($nb, $nb, true);
+		dsLog('─── ' . $ok . ' OK, ' . $ko . ' erreur(s) ───');
+
+	// ════════════════════════════════════════════════════════════════════════
+	} elseif ($script === 'generate-rental-shipping') {
+	// ════════════════════════════════════════════════════════════════════════
+		if (!isModEnabled('expedition')) {
+			dsLog('❌ Module Expéditions requis.', 'error');
+			goto render;
+		}
+		$fk_project = GETPOST('fk_project', 'int');
+		if ($fk_project <= 0) {
+			dsLog('❌ Projet de location requis.', 'error');
+			goto render;
+		}
+
+		require_once DOL_DOCUMENT_ROOT . '/expedition/class/expedition.class.php';
+		require_once DOL_DOCUMENT_ROOT . '/commande/class/commande.class.php';
+		require_once DOL_DOCUMENT_ROOT . '/projet/class/project.class.php';
+
+		$project = new Project($db);
+		if ($project->fetch($fk_project) <= 0) {
+			dsLog('❌ Projet introuvable.', 'error');
+			goto render;
+		}
+
+		// Find the first warehouse linked to the project
+		$warehouse_id = 0;
+		$reswh = $db->query("SELECT rowid FROM " . MAIN_DB_PREFIX . "entrepot WHERE fk_project=" . $fk_project . " ORDER BY rowid ASC LIMIT 1");
+		if ($reswh && ($owh = $db->fetch_object($reswh))) {
+			$warehouse_id = $owh->rowid;
+		}
+		if ($warehouse_id <= 0) {
+			dsLog('❌ Aucun entrepôt associé à ce projet LLD. Expédition impossible.', 'error');
+			goto render;
+		}
+
+		// Get all validated orders of this project
+		$sqlc = "SELECT rowid FROM " . MAIN_DB_PREFIX . "commande WHERE fk_projet=" . $fk_project . " AND source=1";
+		$resc = $db->query($sqlc);
+		if (!$resc) {
+			dsLog('❌ Erreur SQL: ' . $db->error(), 'error');
+			goto render;
+		}
+
+		$ok = 0;
+		$ko = 0;
+		$total_cmds = $db->num_rows($resc);
+		$processed = 0;
+		if ($total_cmds == 0) {
+			dsLog('⚠ Aucune commande de location trouvée pour ce projet.', 'warn');
+		}
+
+		while ($objcmd = $db->fetch_object($resc)) {
+			$processed++;
+			$cmd = new Commande($db);
+			if ($cmd->fetch($objcmd->rowid) > 0) {
+				$cmd->fetch_thirdparty();
+				
+				$exp = new Expedition($db);
+				$exp->socid = $cmd->socid;
+				$exp->origin = 'commande';
+				$exp->origin_id = $cmd->id;
+				$exp->weight_units = 0;
+				$exp->weight = 0;
+				$exp->size = 0;
+				$exp->size_units = 0;
+				
+				$lines_to_ship = array();
+				foreach ($cmd->lines as $line) {
+					$sql_shipped = "SELECT COALESCE(SUM(qty), 0) as q FROM " . MAIN_DB_PREFIX . "expeditiondet ed JOIN " . MAIN_DB_PREFIX . "expedition e ON e.rowid=ed.fk_expedition WHERE ed.fk_elementdet=" . $line->id . " AND e.fk_statut>0";
+					$res_sh = $db->query($sql_shipped);
+					$q_shipped = ($res_sh && ($osh = $db->fetch_object($res_sh))) ? $osh->q : 0;
+					$reste = $line->qty - $q_shipped;
+					if ($reste > 0) {
+						$lines_to_ship[] = array(
+							'origin_line_id' => $line->id,
+							'qty' => $reste,
+							'rang' => $line->rang
+						);
+					}
+				}
+
+				if (count($lines_to_ship) > 0) {
+					$exp->date_creation = dol_now();
+					$exp->date_delivery = dol_now();
+					
+					foreach ($lines_to_ship as $l) {
+						$expline = new ExpeditionLigne($db);
+						$expline->entrepot_id = $warehouse_id;
+						$expline->origin_line_id = $l['origin_line_id'];
+						$expline->qty = $l['qty'];
+						$expline->rang = $l['rang'];
+						$exp->lines[] = $expline;
+					}
+
+					$r = $exp->create($fuser);
+					if ($r > 0) {
+						$exp->valid($fuser);
+						$qte_totale = array_sum(array_column($lines_to_ship, 'qty'));
+						dsLog('✔ | ' . $exp->ref . ' | Commande: ' . $cmd->ref . ' | Projet: ' . $project->ref . ' | ' . htmlspecialchars($cmd->thirdparty->nom) . ' | ' . $qte_totale . ' expédié(s)', 'success');
+						$ok++;
+					} else {
+						$errStr = $exp->error ?: (is_array($exp->errors) ? join(', ', $exp->errors) : 'Erreur expédition');
+						dsLog('✘ Erreur création expédition pour ' . $cmd->ref . ' — ' . $errStr, 'error');
+						$ko++;
+					}
+				}
+			}
+			dolinstreamProgress($processed, $total_cmds);
+		}
+		dolinstreamProgress($total_cmds, $total_cmds, true);
+		dsLog('─── ' . $ok . ' expédition(s) créée(s), ' . $ko . ' erreur(s) ───');
 
 	// ════════════════════════════════════════════════════════════════════════
 	} elseif ($script === 'workflow-opp-cl-pr') {
@@ -1712,13 +2085,22 @@ foreach ($statsMap as $key => $info) {
 $activeScript = $script ?: 'generate-thirdparty';
 
 // ── DB listing toujours actif (25 derniers elements) ─────────────────────────
+$num_res = 0;
+$limit = GETPOST('limit', 'int') ?: 25;
+
 if (!empty($dsDbConf[$activeScript])) {
 	$_conf  = $dsDbConf[$activeScript];
 	$dbHead = $_conf['head'];
 	$dbUrl  = $_conf['url'];
-	$_sql   = str_replace('{NB}', 25, $_conf['select']);
+	$offset = $limit * $page;
+	$_sql   = str_replace('LIMIT {NB}', 'LIMIT ' . ($limit + 1) . ' OFFSET ' . $offset, $_conf['select']);
 	$_res   = $db->query($_sql);
-	while ($_res && ($_obj = $db->fetch_object($_res))) $dbResults[] = (array) $_obj;
+	$num_res = $_res ? $db->num_rows($_res) : 0;
+	$i = 0;
+	while ($_res && ($_obj = $db->fetch_object($_res)) && $i < $limit) {
+		$dbResults[] = (array) $_obj;
+		$i++;
+	}
 }
 
 // ── Reload post-AJAX : lit preExecMaxRowid depuis le fichier .prev.json ─────────────────
@@ -1849,7 +2231,9 @@ $scriptDefs = array(
 		'perm'    => 'generate',
 		'columns' => array($langs->transnoentitiesnoconv('Ref'), $langs->transnoentitiesnoconv('Date'), $langs->transnoentitiesnoconv('ThirdParty'), $langs->transnoentitiesnoconv('AmountHT'), $langs->transnoentitiesnoconv('AmountTTC')),
 		'fields'  => array(
-			array('name' => 'nb', 'label' => $langs->transnoentitiesnoconv('NumberToGenerate'), 'type' => 'number', 'default' => 10, 'min' => 1, 'max' => 5000),
+			array('name' => 'date_start', 'label' => 'Date début', 'type' => 'date', 'default' => date('Y-01-01')),
+			array('name' => 'date_end', 'label' => 'Date fin', 'type' => 'date', 'default' => date('Y-12-31')),
+			array('name' => 'nb_per_month', 'label' => 'Factures / mois', 'type' => 'number', 'default' => 5, 'min' => 1, 'max' => 5000),
 		),
 	),
 	'generate-order' => array(
@@ -1964,6 +2348,103 @@ $scriptDefs = array(
 				'default'     => 'WH',
 				'placeholder' => $langs->transnoentitiesnoconv('FieldRefPrefixPlaceholder'),
 			),
+		),
+	),
+	'generate-rental-product' => array(
+		'label'   => 'Générer Produits Loc',
+		'icon'    => 'product',
+		'hint'    => 'Génère des produits configurés pour la location avec un ratio paramétrable de prix locatif par rapport au prix de vente.',
+		'danger'  => false,
+		'perm'    => 'generate',
+		'columns' => array('Réf', 'Titre', 'Prix Vente', 'Prix Loc/J'),
+		'fields'  => array(
+			array('name' => 'nb', 'label' => 'Nombre à générer', 'type' => 'number', 'default' => 10, 'min' => 1, 'max' => 5000),
+			array('name' => 'rental_ratio', 'label' => 'Ratio Prix Loc/Vente (%)', 'type' => 'number', 'default' => 5, 'min' => 1, 'max' => 100),
+		),
+	),
+	'generate-rental-project' => array(
+		'label'   => 'Générer Projets LLD',
+		'icon'    => 'project',
+		'hint'    => 'Génère des projets pré-configurés comme Location Longue Durée (LLD).',
+		'danger'  => false,
+		'perm'    => 'generate',
+		'columns' => array('Réf', 'Titre', 'Statut', 'Montant', 'Budget', 'Nb Entrepôts', 'Factures Réc.'),
+		'fields'  => array(
+			array('name' => 'nb', 'label' => 'Nombre à générer', 'type' => 'number', 'default' => 10, 'min' => 1, 'max' => 2000),
+			array(
+				'name'    => 'socids',
+				'label'   => 'Tiers',
+				'type'    => 'multiselect_tiers',
+			),
+			array(
+				'name'    => 'nb_wh',
+				'label'   => "Entrepôts liés",
+				'type'    => 'number',
+				'default' => 0,
+				'min'     => 0,
+				'max'     => 50
+			),
+			array(
+				'name'    => 'date_start',
+				'label'   => 'Date de début',
+				'type'    => 'date',
+				'default' => date('Y-m-d', strtotime('-1 year'))
+			),
+			array(
+				'name'    => 'sales_billing',
+				'label'   => 'Facturation LLD',
+				'type'    => 'select',
+				'options' => array(
+					'1' => 'Facture mensuelle',
+					'2' => 'Depuis l\'onglet LLD',
+					'3' => 'Facturation manuelle',
+				),
+				'default' => '3'
+			)
+		),
+	),
+	'generate-rental-order' => array(
+		'label'   => 'Générer Commande Loc',
+		'icon'    => 'order',
+		'hint'    => 'Génère des commandes de location associées à un projet LLD sélectionné.',
+		'danger'  => false,
+		'perm'    => 'generate',
+		'columns' => array('Réf Commande', 'Projet LLD', 'Nb Produits', 'Tiers', 'Date', 'Montant HT'),
+		'fields'  => array(
+			array('name' => 'nb', 'label' => 'Nombre à générer', 'type' => 'number', 'default' => 1, 'min' => 1, 'max' => 50),
+			array(
+				'name'    => 'fk_project',
+				'label'   => 'Projet de location',
+				'type'    => 'select_rental_project',
+			),
+			array(
+				'name'    => 'product_ids',
+				'label'   => 'Produits de location',
+				'type'    => 'multiselect_rental_product',
+			),
+			array(
+				'name'    => 'qty_mode',
+				'label'   => 'Mode de quantité',
+				'type'    => 'select',
+				'options' => array('fixed' => 'Fixe', 'random' => 'Aléatoire'),
+				'default' => 'fixed',
+			),
+			array('name' => 'qty_val', 'label' => 'Quantité (ou max)', 'type' => 'number', 'default' => 1, 'min' => 1, 'max' => 1000)
+		),
+	),
+	'generate-rental-shipping' => array(
+		'label'   => 'Expédition Loc',
+		'icon'    => 'sending',
+		'hint'    => 'Génère l\'expédition pour les commandes d\'un projet LLD sélectionné.',
+		'danger'  => false,
+		'perm'    => 'generate',
+		'columns' => array('Réf Exp.', 'Commande', 'Projet LLD', 'Tiers', 'Qté Expédiée'),
+		'fields'  => array(
+			array(
+				'name'    => 'fk_project',
+				'label'   => 'Projet de location',
+				'type'    => 'select_rental_project',
+			)
 		),
 	),
 	'purge-data' => array(
@@ -2187,6 +2668,41 @@ foreach ($scriptLog as $entry) {
             $cells = array(
                 $makeLink('propal', $m[1], '/comm/propal/card.php?id='),
                 $resolveSoc((int)$m[2]), $m[3], $m[4] . ' €',
+            );
+        }
+
+    // ── generate-rental-product ─────────────────────────────────────────────
+    } elseif ($activeScript === 'generate-rental-product') {
+        // ✓ #N | id=11 | PRD | Label | 15.00 € | 0.75 €/j | 0.45 €/j | Infos
+        if (preg_match('/\| id=(\d+) \| (\S+) \| (.+?) \| ([\d\.]+ \S+) \| ([\d\.]+ \S+) \| ([\d\.]+ \S+) \| (.+)/', $msg, $m)) {
+            $cells = array(
+                $makeLink('product', $m[2], '/product/card.php?id=' . $m[1]),
+                trim($m[3]), $m[4], $m[5], $m[6], trim($m[7])
+            );
+        }
+
+    // ── generate-rental-project ─────────────────────────────────────────────
+    } elseif ($activeScript === 'generate-rental-project') {
+        if (preg_match('/\| (\S+) \| (.+?) \| (.+?) \| ([\d ]+) €\S* \| ([\d ]+) €\S* \| (\d+) \| (\d+)/', $msg, $m)) {
+            $cells = array(
+                $makeLink('projet', $m[1], '/projet/card.php?id='),
+                trim($m[2]), trim($m[3]),
+                str_replace(' ', '', $m[4]) . ' €',
+                str_replace(' ', '', $m[5]) . ' €',
+                $m[6],
+                $m[7]
+            );
+        }
+
+    // ── generate-rental-order ───────────────────────────────────────────────
+    } elseif ($activeScript === 'generate-rental-order') {
+        // ✔ #0 | CMD-001 | Projet: PRJ-001 | 2 produit(s) | Tiers Name | 12/06/2025 | 1 500,00 €
+        if (preg_match('/\| (\S+) \| Projet: (\S+) \| (.+?) \| (.+?) \| (.+?) \| (.+) €/', $msg, $m)) {
+            $cells = array(
+                $makeLink('commande', $m[1], '/commande/card.php?ref='),
+                $makeLink('projet', $m[2], '/projet/card.php?ref='),
+                trim($m[3]), trim($m[4]), trim($m[5]),
+                str_replace(' ', '', trim($m[6])) . ' €'
             );
         }
 
@@ -2454,12 +2970,73 @@ print dol_get_fiche_head($head, $activeTab, 'DoliStream', -1, 'technic');
             <option value="<?php print htmlspecialchars($v); ?>" <?php print ($selectedVal === $v ? 'selected' : ''); ?>><?php print htmlspecialchars($l); ?></option>
     <?php endforeach; ?>
           </select>
+        <?php elseif ($field['type'] === 'multiselect_tiers'): ?>
+          <select name="<?php print $field['name']; ?>[]" id="ds-fld-<?php print $field['name']; ?>" class="flat" multiple="multiple" required style="min-width:300px; max-width:500px;">
+          <?php
+            global $db;
+            $res = $db->query("SELECT rowid, nom FROM " . MAIN_DB_PREFIX . "societe WHERE status=1 AND client IN (1,3) ORDER BY nom");
+            while ($res && $obj = $db->fetch_object($res)) {
+              print '<option value="'.$obj->rowid.'">'.htmlspecialchars($obj->nom).'</option>';
+            }
+          ?>
+          </select>
+          <script>
+            document.addEventListener('DOMContentLoaded', function() {
+              if (typeof jQuery !== 'undefined' && jQuery.fn.select2) {
+                jQuery('#ds-fld-<?php print $field['name']; ?>').select2({
+                  placeholder: "Sélectionnez des tiers...",
+                  width: '300px'
+                });
+              }
+            });
+          </script>
+        <?php elseif ($field['type'] === 'select_rental_project'): ?>
+          <select name="<?php print $field['name']; ?>" id="ds-fld-<?php print $field['name']; ?>" class="flat" required style="min-width:300px; max-width:500px;">
+            <option value="">-- Sélectionnez un projet LLD --</option>
+          <?php
+            global $db;
+            $res = $db->query("SELECT p.rowid, p.ref, p.title FROM " . MAIN_DB_PREFIX . "projet p LEFT JOIN " . MAIN_DB_PREFIX . "projet_extrafields pe ON pe.fk_object=p.rowid WHERE p.fk_statut > 0 AND pe.rental_ltrproject=2 ORDER BY p.rowid DESC LIMIT 100");
+            while ($res && $obj = $db->fetch_object($res)) {
+              print '<option value="'.$obj->rowid.'">'.htmlspecialchars($obj->ref . ' - ' . $obj->title).'</option>';
+            }
+          ?>
+          </select>
+          <script>
+            document.addEventListener('DOMContentLoaded', function() {
+              if (typeof jQuery !== 'undefined' && jQuery.fn.select2) {
+                jQuery('#ds-fld-<?php print $field['name']; ?>').select2({ width: '300px' });
+              }
+            });
+          </script>
+        <?php elseif ($field['type'] === 'multiselect_rental_product'): ?>
+          <select name="<?php print $field['name']; ?>[]" id="ds-fld-<?php print $field['name']; ?>" class="flat" multiple="multiple" required style="min-width:300px; max-width:500px;">
+          <?php
+            global $db;
+            $res = $db->query("SELECT p.rowid, p.ref, p.label, pe.rental_price FROM " . MAIN_DB_PREFIX . "product p LEFT JOIN " . MAIN_DB_PREFIX . "product_extrafields pe ON pe.fk_object = p.rowid WHERE p.tosell=1 AND pe.rental_product=1 ORDER BY p.ref DESC LIMIT 200");
+            while ($res && $obj = $db->fetch_object($res)) {
+              print '<option value="'.$obj->rowid.'">'.htmlspecialchars($obj->ref . ' - ' . $obj->label . ' (' . round((float)$obj->rental_price, 2) . ' €/j)').'</option>';
+            }
+          ?>
+          </select>
+          <script>
+            document.addEventListener('DOMContentLoaded', function() {
+              if (typeof jQuery !== 'undefined' && jQuery.fn.select2) {
+                jQuery('#ds-fld-<?php print $field['name']; ?>').select2({
+                  placeholder: "Sélectionnez des produits...",
+                  width: '300px'
+                });
+              }
+            });
+          </script>
         <?php elseif ($field['type'] === 'checkbox'): ?>
           <input type="checkbox" name="<?php print $field['name']; ?>" id="ds-fld-<?php print $field['name']; ?>" value="1" <?php print (!empty($field['default']) ? 'checked' : ''); ?>>
         <?php elseif ($field['type'] === 'number'): ?>
           <input type="number" name="<?php print $field['name']; ?>" id="ds-fld-<?php print $field['name']; ?>" class="flat" style="width:70px;"
             value="<?php print (int)($field['default'] ?? 10); ?>"
             min="<?php print $field['min'] ?? 1; ?>" max="<?php print $field['max'] ?? 100000; ?>" required>
+        <?php elseif ($field['type'] === 'date'): ?>
+          <input type="date" name="<?php print $field['name']; ?>" id="ds-fld-<?php print $field['name']; ?>" class="flat"
+            value="<?php print htmlspecialchars($field['default'] ?? ''); ?>" required>
         <?php else: ?>
           <input type="text" name="<?php print $field['name']; ?>" class="flat minwidth200"
             value="<?php print htmlspecialchars($field['default'] ?? ''); ?>"
@@ -2505,13 +3082,14 @@ $_warnCount = count(array_filter($scriptLog, fn($l) => $l['level'] === 'warn'));
 
 <?php if (!empty($dbResults)): ?>
 <?php
+$numToPass = ($dbNewCount > 0) ? $dbNewCount : $num_res;
 print_barre_liste(
 	'Éléments créés',
 	$page, $_SERVER['PHP_SELF'], 'script=' . urlencode($activeScript),
 	'', '', '',
-	($dbNewCount > 0 ? $dbNewCount : count($dbResults)),
-	($dbNewCount > 0 ? $dbNewCount : count($dbResults)),
-	'', 0, '', '', 25
+	$numToPass,
+	$numToPass,
+	'', 0, '', '', $limit
 );
 
 ?>
