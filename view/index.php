@@ -2635,7 +2635,7 @@ print dol_get_fiche_head($head, $activeTab, 'DoliStream', -1, 'technic');
     <?php endforeach; ?>
           </select>
         <?php elseif ($field['type'] === 'multiselect_tiers'): ?>
-          <select name="<?php print $field['name']; ?>[]" id="ds-fld-<?php print $field['name']; ?>" class="flat minwidth200" multiple="multiple" size="3" required>
+          <select name="<?php print $field['name']; ?>[]" id="ds-fld-<?php print $field['name']; ?>" class="flat" multiple="multiple" required style="min-width:300px; max-width:500px;">
           <?php
             global $db;
             $res = $db->query("SELECT rowid, nom FROM " . MAIN_DB_PREFIX . "societe WHERE status=1 AND client IN (1,3) ORDER BY nom");
@@ -2644,6 +2644,16 @@ print dol_get_fiche_head($head, $activeTab, 'DoliStream', -1, 'technic');
             }
           ?>
           </select>
+          <script>
+            document.addEventListener('DOMContentLoaded', function() {
+              if (typeof jQuery !== 'undefined' && jQuery.fn.select2) {
+                jQuery('#ds-fld-<?php print $field['name']; ?>').select2({
+                  placeholder: "Sélectionnez des tiers...",
+                  width: '300px'
+                });
+              }
+            });
+          </script>
         <?php elseif ($field['type'] === 'checkbox'): ?>
           <input type="checkbox" name="<?php print $field['name']; ?>" id="ds-fld-<?php print $field['name']; ?>" value="1" <?php print (!empty($field['default']) ? 'checked' : ''); ?>>
         <?php elseif ($field['type'] === 'number'): ?>
