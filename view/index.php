@@ -1029,14 +1029,13 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 	// ════════════════════════════════════════════════════════════════════════
 	} elseif ($script === 'generate-rental-project') {
 	// ════════════════════════════════════════════════════════════════════════
-		$projectMode = in_array($mode, array('free', 'linked')) ? $mode : 'linked';
 		$dateStartInput = GETPOST('date_start', 'alpha');
 		$baseTs = !empty($dateStartInput) ? strtotime($dateStartInput) : strtotime('-1 year');
 		$salesBilling = (int) GETPOST('sales_billing', 'int') ?: 3;
 
-		$socids      = ($projectMode === 'linked') ? dolinstreamGetClientIds($db) : array();
-		if ($projectMode === 'linked' && empty($socids)) {
-			dsLog('❌ ' . $langs->transnoentitiesnoconv('NoClientThirdparty') . ' (mode lié)', 'error');
+		$socids      = GETPOST('socids', 'array');
+		if (empty($socids)) {
+			dsLog('❌ ' . $langs->transnoentitiesnoconv('NoClientThirdparty') . ' (tiers obligatoire)', 'error');
 			goto render;
 		}
 		$oppStatuses = array(
@@ -1070,7 +1069,7 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 				'options_rental_ltrproject' => 2,
 				'options_rental_ltr_sales_billing' => $salesBilling
 			);
-			if ($projectMode === 'linked' && !empty($socids)) {
+			if (!empty($socids)) {
 				$proj->socid = $socids[array_rand($socids)];
 			}
 			$result = $proj->create($fuser);
@@ -2103,13 +2102,9 @@ $scriptDefs = array(
 		'fields'  => array(
 			array('name' => 'nb', 'label' => 'Nombre à générer', 'type' => 'number', 'default' => 10, 'min' => 1, 'max' => 2000),
 			array(
-				'name'    => 'mode',
+				'name'    => 'socids',
 				'label'   => 'Tiers',
-				'type'    => 'select',
-				'options' => array(
-					'linked' => 'Lié à un tiers aléatoire',
-				),
-				'default' => 'linked',
+				'type'    => 'multiselect_tiers',
 			),
 			array(
 				'name'    => 'date_start',
@@ -2638,6 +2633,16 @@ print dol_get_fiche_head($head, $activeTab, 'DoliStream', -1, 'technic');
           ?>
             <option value="<?php print htmlspecialchars($v); ?>" <?php print ($selectedVal === $v ? 'selected' : ''); ?>><?php print htmlspecialchars($l); ?></option>
     <?php endforeach; ?>
+          </select>
+        <?php elseif ($field['type'] === 'multiselect_tiers'): ?>
+          <select name="<?php print $field['name']; ?>[]" id="ds-fld-<?php print $field['name']; ?>" class="flat minwidth200" multiple="multiple" size="3" required>
+          <?php
+            global $db;
+            $res = $db->query("SELECT rowid, nom FROM " . MAIN_DB_PREFIX . "societe WHERE status=1 AND client IN (1,3) ORDER BY nom");
+            while ($res && $obj = $db->fetch_object($res)) {
+              print '<option value="'.$obj->rowid.'">'.htmlspecialchars($obj->nom).'</option>';
+            }
+          ?>
           </select>
         <?php elseif ($field['type'] === 'checkbox'): ?>
           <input type="checkbox" name="<?php print $field['name']; ?>" id="ds-fld-<?php print $field['name']; ?>" value="1" <?php print (!empty($field['default']) ? 'checked' : ''); ?>>
