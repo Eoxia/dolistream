@@ -211,6 +211,18 @@ $dsDbConf = array(
 		'select' => "SELECT l.rowid, l.ref, s.nom AS tiers, DATE_FORMAT(l.date_creation,'%d/%m/%Y') AS date_crea, IF(l.statut=0,'Brouillon','Validé') AS statut FROM " . MAIN_DB_PREFIX . "loc_location l LEFT JOIN " . MAIN_DB_PREFIX . "societe s ON s.rowid=l.fk_soc ORDER BY l.rowid DESC LIMIT {NB}",
 		'url'    => '/rental/card.php?id=',
 	),
+	'generate-rental-product' => array(
+		'table'  => 'product',
+		'head'   => array('Réf', 'Label', 'Prix Vente', 'Prix Loc/J'),
+		'select' => "SELECT p.rowid, p.ref, p.label, CONCAT(ROUND(p.price,2),' €') AS vente, CONCAT(ROUND(pe.rental_price,2),' €') AS loc FROM " . MAIN_DB_PREFIX . "product p LEFT JOIN " . MAIN_DB_PREFIX . "product_extrafields pe ON pe.fk_object = p.rowid WHERE pe.rental_product=1 ORDER BY p.rowid DESC LIMIT {NB}",
+		'url'    => '/product/card.php?id=',
+	),
+	'generate-rental-project' => array(
+		'table'  => 'projet',
+		'head'   => array('Réf', 'Titre', 'Statut Opp', 'Montant Opp'),
+		'select' => "SELECT p.rowid, p.ref, p.title, IFNULL(ps.code,'-') AS opp_statut, CONCAT(ROUND(p.opp_amount,2),' €') AS opp_mnt FROM " . MAIN_DB_PREFIX . "projet p LEFT JOIN " . MAIN_DB_PREFIX . "c_lead_status ps ON ps.rowid=p.fk_opp_status LEFT JOIN " . MAIN_DB_PREFIX . "projet_extrafields pe ON pe.fk_object = p.rowid WHERE pe.rental_ltrproject=2 ORDER BY p.rowid DESC LIMIT {NB}",
+		'url'    => '/projet/card.php?id=',
+	),
 );
 $preExecMaxRowid = 0;
 
