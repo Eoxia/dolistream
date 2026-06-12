@@ -1032,6 +1032,7 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 		$dateStartInput = GETPOST('date_start', 'alpha');
 		$baseTs = !empty($dateStartInput) ? strtotime($dateStartInput) : strtotime('-1 year');
 		$salesBilling = (int) GETPOST('sales_billing', 'int') ?: 3;
+		$nbWh = max(0, (int) GETPOST('nb_wh', 'int'));
 
 		$socids      = GETPOST('socids', 'array');
 		if (empty($socids)) {
@@ -1074,7 +1075,21 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 			}
 			$result = $proj->create($fuser);
 			if ($result > 0) {
-				dsLog('✔ #' . $s . ' | ' . $proj->ref . ' | ' . $proj->title . ' | ' . $oppStatus['label'] . ' | ' . number_format((int)$proj->opp_amount, 0, ',', ' ') . ' € | ' . number_format((int)$proj->budget_amount, 0, ',', ' ') . ' €', 'success');
+				if ($nbWh > 0) {
+					require_once DOL_DOCUMENT_ROOT . '/product/stock/class/entrepot.class.php';
+					for ($w = 1; $w <= $nbWh; $w++) {
+						$wh = new Entrepot($db);
+						$wh->ref = $proj->ref . '-WH' . sprintf('%02d', $w);
+						$wh->label = 'Entrepôt LLD ' . $proj->ref . ' - ' . $w;
+						$wh->description = 'Généré automatiquement et lié au projet ' . $proj->ref;
+						$wh->lieu = 'Sur site';
+						$wh->statut = 1;
+						$wh->fk_project = $proj->id;
+						$wh->create($fuser);
+					}
+				}
+				$whMsg = $nbWh > 0 ? " (+$nbWh WH)" : "";
+				dsLog('✔ #' . $s . ' | ' . $proj->ref . ' | ' . $proj->title . $whMsg . ' | ' . $oppStatus['label'] . ' | ' . number_format((int)$proj->opp_amount, 0, ',', ' ') . ' € | ' . number_format((int)$proj->budget_amount, 0, ',', ' ') . ' €', 'success');
 				$ok++;
 			} else {
 				$errStr = $proj->error ?: (is_array($proj->errors) ? join(', ', $proj->errors) : 'Erreur inconnue');
@@ -2105,6 +2120,14 @@ $scriptDefs = array(
 				'name'    => 'socids',
 				'label'   => 'Tiers',
 				'type'    => 'multiselect_tiers',
+			),
+			array(
+				'name'    => 'nb_wh',
+				'label'   => "Entrepôts liés",
+				'type'    => 'number',
+				'default' => 0,
+				'min'     => 0,
+				'max'     => 50
 			),
 			array(
 				'name'    => 'date_start',
