@@ -806,13 +806,42 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 	// ════════════════════════════════════════════════════════════════════════
 	} elseif ($script === 'generate-proposal') {
 	// ════════════════════════════════════════════════════════════════════════
-		$socids  = dolinstreamGetClientIds($db);
-		$prodids = dolinstreamGetProductIds($db);
+		// ── Lecture des paramètres ─────────────────────────────────────────────
+		$lineType      = GETPOST('line_type', 'alpha') ?: 'mixed';
+		if (!in_array($lineType, array('product', 'service', 'mixed'))) $lineType = 'mixed';
+
+		$nbProducts    = ($lineType !== 'service') ? max(0, GETPOST('nb_products', 'int')) : 0;
+		$qtyPerProduct = max(1, GETPOST('qty_per_product', 'int') ?: 3);
+		$nbServices    = ($lineType !== 'product') ? max(0, GETPOST('nb_services', 'int')) : 0;
+		$qtyPerService = max(1, GETPOST('qty_per_service', 'int') ?: 2);
+
+		// Fallback : au moins 1 ligne si tout est à 0
+		if ($nbProducts == 0 && $nbServices == 0) {
+			if ($lineType === 'service') $nbServices = 1;
+			elseif ($lineType === 'product') $nbProducts = 1;
+			else $nbProducts = 1;
+		}
+
+		$socids = dolinstreamGetClientIds($db);
+
+		// Charger les pools produits / services selon le mode
+		$prodids = array();
+		$servids = array();
+		if ($nbProducts > 0) {
+			$prodids = dolinstreamGetProductIds($db, 'all', 'all', 'product');
+		}
+		if ($nbServices > 0) {
+			$servids = dolinstreamGetProductIds($db, 'all', 'all', 'service');
+		}
 
 		if (empty($socids)) { dsLog('❌ ' . $langs->transnoentitiesnoconv('NoClientThirdparty'), 'error'); goto render; }
+		if ($nbProducts > 0 && empty($prodids)) { dsLog('❌ Aucun produit à vendre trouvé (type=produit).', 'error'); goto render; }
+		if ($nbServices > 0 && empty($servids)) { dsLog('❌ Aucun service à vendre trouvé (type=service).', 'error'); goto render; }
 
 		$dates = dolinstreamGetRandomDates();
-		dsLog($langs->transnoentities('GenerateProposals') . ' : ' . $nb);
+		$lineTypeLabel = ($lineType === 'product') ? 'Produit' : (($lineType === 'service') ? 'Service' : 'Mixte');
+		$totalLines = $nbProducts + $nbServices;
+		dsLog($langs->transnoentities('GenerateProposals') . ' : ' . $nb . ' (type=' . $lineTypeLabel . ', nbP=' . $nbProducts . ', qP=' . $qtyPerProduct . ', nbS=' . $nbServices . ', qS=' . $qtyPerService . ')');
 		$ok = $ko = 0;
 
 		for ($s = 0; $s < $nb; $s++) {
@@ -828,27 +857,48 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 			// propre transaction. Un wrapping externe perturbe le module de numérotation.
 			$result = $obj->create($fuser);
 			if ($result >= 0) {
-				$nbLines = mt_rand(1, 4);
-				for ($l = 0; $l < $nbLines; $l++) {
+				$lineOk = true;
+				// ── Ajouter les lignes produit ────────────────────────────────
+				for ($l = 0; $l < $nbProducts; $l++) {
 					if (empty($prodids)) break;
 					$pid     = $prodids[array_rand($prodids)];
 					$product = new Product($db);
 					$product->fetch($pid);
 					$rLine = $obj->addline(
-						$obj->id,
 						$product->description,
 						$product->price,
+						$qtyPerProduct,
 						$product->tva_tx ?? 20,
 						0, 0,
-						mt_rand(1, 5),
 						$pid,
-						'',
+						0,
 						$product->price_base_type,
 						$product->price_ttc,
 						0,
 						$product->type
 					);
-					if ($rLine < 0) dsLog('⚠ addline pid=' . $pid . ' : ' . $obj->error, 'warn');
+					if ($rLine < 0) { $lineOk = false; dsLog('⚠ addline produit pid=' . $pid . ' : ' . $obj->error, 'warn'); }
+				}
+				// ── Ajouter les lignes service ────────────────────────────────
+				for ($l = 0; $l < $nbServices; $l++) {
+					if (empty($servids)) break;
+					$sid     = $servids[array_rand($servids)];
+					$service = new Product($db);
+					$service->fetch($sid);
+					$rLine = $obj->addline(
+						$service->description,
+						$service->price,
+						$qtyPerService,
+						$service->tva_tx ?? 20,
+						0, 0,
+						$sid,
+						0,
+						$service->price_base_type,
+						$service->price_ttc,
+						0,
+						$service->type
+					);
+					if ($rLine < 0) { $lineOk = false; dsLog('⚠ addline service sid=' . $sid . ' : ' . $obj->error, 'warn'); }
 				}
 				// ── Même pattern que Facture::validate() et Commande::valid() ─────────
 				// Recharge l'objet + tiers + lignes AVANT valid() pour que le module
@@ -859,7 +909,7 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 				if ($obj->valid($fuser) > 0) {
 					$obj->fetch($obj->id);
 					$ht = price2num($obj->total_ht, 'MT');
-					dsLog('✔ #' . $s . ' | ' . $obj->ref . ' | soc=' . $obj->socid . ' | ' . dol_print_date($obj->date, 'day') . ' | HT=' . $ht, 'success');
+					dsLog('✔ #' . $s . ' | ' . $obj->ref . ' | type=' . $lineTypeLabel . ' | nb=' . $totalLines . ' | soc=' . $obj->socid . ' | ' . dol_print_date($obj->date, 'day') . ' | HT=' . $ht, 'success');
 					$ok++;
 				} else {
 					dsLog('✘ #' . $s . ' — valid() : ' . $obj->error, 'error');
@@ -1888,9 +1938,24 @@ $scriptDefs = array(
 		'hint'    => $langs->transnoentitiesnoconv('HintProposal'),
 		'danger'  => false,
 		'perm'    => 'generate',
-		'columns' => array($langs->transnoentitiesnoconv('Ref'), $langs->transnoentitiesnoconv('Date'), $langs->transnoentitiesnoconv('ThirdParty'), $langs->transnoentitiesnoconv('AmountHT')),
+		'columns' => array($langs->transnoentitiesnoconv('Ref'), $langs->transnoentitiesnoconv('FieldLineType'), $langs->transnoentitiesnoconv('FieldNumberPerProposal'), $langs->transnoentitiesnoconv('ThirdParty'), $langs->transnoentitiesnoconv('Date'), $langs->transnoentitiesnoconv('AmountHT')),
 		'fields'  => array(
 			array('name' => 'nb', 'label' => $langs->transnoentitiesnoconv('NumberToGenerate'), 'type' => 'number', 'default' => 10, 'min' => 1, 'max' => 5000),
+			array(
+				'name'    => 'line_type',
+				'label'   => $langs->transnoentitiesnoconv('FieldLineType'),
+				'type'    => 'select',
+				'default' => 'mixed',
+				'options' => array(
+					'mixed'   => $langs->transnoentitiesnoconv('OptMixed'),
+					'product' => $langs->transnoentitiesnoconv('OptProductOnly'),
+					'service' => $langs->transnoentitiesnoconv('OptServiceOnly'),
+				),
+			),
+			array('name' => 'nb_products', 'label' => $langs->transnoentitiesnoconv('FieldNbProducts'), 'type' => 'number', 'default' => 2, 'min' => 0, 'max' => 100),
+			array('name' => 'qty_per_product', 'label' => $langs->transnoentitiesnoconv('FieldQtyPerProduct'), 'type' => 'number', 'default' => 3, 'min' => 1, 'max' => 100),
+			array('name' => 'nb_services', 'label' => $langs->transnoentitiesnoconv('FieldNbServices'), 'type' => 'number', 'default' => 1, 'min' => 0, 'max' => 100),
+			array('name' => 'qty_per_service', 'label' => $langs->transnoentitiesnoconv('FieldQtyPerService'), 'type' => 'number', 'default' => 2, 'min' => 1, 'max' => 100),
 		),
 	),
 	'generate-project' => array(
@@ -2182,11 +2247,12 @@ foreach ($scriptLog as $entry) {
 
     // ── generate-proposal ───────────────────────────────────────────────────
     } elseif ($activeScript === 'generate-proposal') {
-        // ✓ #N | REF | soc=SOCID | DATE | HT=X
-        if (preg_match('/\| (\S+) \| soc=(\d+) \| (\S+) \| HT=([\d.]+)/', $msg, $m)) {
+        // ✓ #N | REF | type=TYPE | nb=N | soc=SOCID | DATE | HT=X
+        if (preg_match('/\| (\S+) \| type=(\S+) \| nb=(\d+) \| soc=(\d+) \| (\S+) \| HT=([\d.]+)/', $msg, $m)) {
             $cells = array(
                 $makeLink('propal', $m[1], '/comm/propal/card.php?id='),
-                $resolveSoc((int)$m[2]), $m[3], $m[4] . ' €',
+                $m[2], $m[3],
+                $resolveSoc((int)$m[4]), $m[5], $m[6] . ' €',
             );
         }
 

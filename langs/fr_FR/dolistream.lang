@@ -158,6 +158,14 @@ LogTestFinished = ℹ Mode test terminé — aucune donnée modifiée.
 
 FieldNumberPerOrder=Nombre de produit par commande
 FieldNumberPerProposal=Nombre de produit par proposition
+FieldLineType=Type de ligne
+OptProductOnly=Produit uniquement
+OptServiceOnly=Service uniquement
+OptMixed=Mixte (produit + service)
+FieldNbProducts=Nb de produits
+FieldQtyPerProduct=Qté / produit
+FieldNbServices=Nb de services
+FieldQtyPerService=Qté / service
 FieldProductSelector=Sélecteur (Produit, lot, série)
 FieldProductWithStock=Produit avec du stock
 OptYes=Oui
