@@ -320,6 +320,67 @@ class modDolistream extends DolibarrModules
 			'user'     => 0,
 		);
 
+		// Left menu - Modules externes (parent)
+		$this->menu[$r++] = array(
+			'fk_menu'  => 'fk_mainmenu=dolistream',
+			'type'     => 'left',
+			'titre'    => '<b>Modules externes</b>',
+			'prefix'   => img_picto('', 'plugin', 'class="pictofixedwidth valignmiddle"'),
+			'mainmenu' => 'dolistream',
+			'leftmenu' => 'dolistream_external_modules',
+			'url'      => '',
+			'langs'    => 'dolistream@dolistream',
+			'position' => 1000 + $r,
+			'enabled'  => "isModEnabled('dolistream')",
+			'perms'    => '$user->hasRight("dolistream", "generate", "run")',
+			'target'   => '',
+			'user'     => 0,
+		);
+
+		// Left menu - Module Location (Rental) - Unclickable header/category
+		$this->menu[$r++] = array(
+			'fk_menu'  => 'fk_mainmenu=dolistream,fk_leftmenu=dolistream_external_modules',
+			'type'     => 'left',
+			'titre'    => 'Module Location (Rental)',
+			'mainmenu' => 'dolistream',
+			'leftmenu' => 'dolistream_external_rental',
+			'url'      => '',
+			'langs'    => 'dolistream@dolistream',
+			'position' => 1000 + $r,
+			'enabled'  => "isModEnabled('dolistream')",
+			'perms'    => '$user->hasRight("dolistream", "generate", "run")',
+			'target'   => '',
+			'user'     => 0,
+		);
+
+		// Sous-menus Rental
+		$rentalItems = array(
+			'generate-rental-product'  => '- Produit loc',
+			'generate-rental-project'  => '- Projet loc',
+			'generate-rental-proposal' => '- Proposition loc',
+			'generate-rental-order'    => '- Commande loc',
+			'generate-rental-expedition' => '- Expédition loc',
+			'generate-rental-delivery' => '- Livraison loc',
+			'generate-rental-workflow' => '- Flux location'
+		);
+
+		foreach ($rentalItems as $scriptKey => $label) {
+			$this->menu[$r++] = array(
+				'fk_menu'  => 'fk_mainmenu=dolistream,fk_leftmenu=dolistream_external_modules',
+				'type'     => 'left',
+				'titre'    => $label,
+				'mainmenu' => 'dolistream',
+				'leftmenu' => 'dolistream_' . str_replace('-', '_', $scriptKey),
+				'url'      => '/dolistream/view/index.php?script=' . $scriptKey,
+				'langs'    => 'dolistream@dolistream',
+				'position' => 1000 + $r,
+				'enabled'  => "isModEnabled('dolistream')",
+				'perms'    => '$user->hasRight("dolistream", "generate", "run")',
+				'target'   => '',
+				'user'     => 0,
+			);
+		}
+
 		// Left menu — Réglages
 		$this->menu[$r++] = array(
 			'fk_menu'  => 'fk_mainmenu=dolistream',
