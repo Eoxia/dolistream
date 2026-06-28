@@ -157,6 +157,14 @@ LogCommit = ✔ Transaction committed (COMMIT)
 LogTestFinished = ℹ Test mode complete — no data was modified.
 
 FieldNumberPerProposal=Number of products per proposal
+FieldLineType=Line type
+OptProductOnly=Product only
+OptServiceOnly=Service only
+OptMixed=Mixed (product + service)
+FieldNbProducts=Nb of products
+FieldQtyPerProduct=Qty / product
+FieldNbServices=Nb of services
+FieldQtyPerService=Qty / service
 # ── Workflows ──────────────────────────────────────────────────────────────────
 Workflow = Workflow
 WorkflowOppClPr = OPP+CL+PR
