@@ -86,12 +86,21 @@ function dolinstreamGetClientIds(DoliDB $db): array
  * Fetch rowids of sellable products
  *
  * @param  DoliDB $db
+ * @param  string $batchMode  'all' | 'no_batch' | 'lot' | 'serial'
+ * @param  string $inStock    'all' | 'yes' | 'no'
+ * @param  string $productType 'all' | 'product' (type=0) | 'service' (type=1)
  * @return int[]
  */
-function dolinstreamGetProductIds(DoliDB $db, string $batchMode = 'all', string $inStock = 'all'): array
+function dolinstreamGetProductIds(DoliDB $db, string $batchMode = 'all', string $inStock = 'all', string $productType = 'all'): array
 {
 	$ids   = array();
 	$sql = 'SELECT p.rowid FROM ' . MAIN_DB_PREFIX . 'product p WHERE p.tosell=1';
+
+	if ($productType === 'product') {
+		$sql .= ' AND p.fk_product_type = 0';
+	} elseif ($productType === 'service') {
+		$sql .= ' AND p.fk_product_type = 1';
+	}
 
 	if ($batchMode === 'no_batch') {
 		$sql .= ' AND p.tobatch = 0';
