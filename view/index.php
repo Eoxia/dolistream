@@ -865,14 +865,13 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 					$product = new Product($db);
 					$product->fetch($pid);
 					$rLine = $obj->addline(
-						$obj->id,
 						$product->description,
 						$product->price,
+						$qtyPerProduct,
 						$product->tva_tx ?? 20,
 						0, 0,
-						$qtyPerProduct,
 						$pid,
-						'',
+						0,
 						$product->price_base_type,
 						$product->price_ttc,
 						0,
@@ -887,14 +886,13 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 					$service = new Product($db);
 					$service->fetch($sid);
 					$rLine = $obj->addline(
-						$obj->id,
 						$service->description,
 						$service->price,
+						$qtyPerService,
 						$service->tva_tx ?? 20,
 						0, 0,
-						$qtyPerService,
 						$sid,
-						'',
+						0,
 						$service->price_base_type,
 						$service->price_ttc,
 						0,
