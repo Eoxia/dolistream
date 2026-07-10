@@ -1,0 +1,161 @@
+# DoliStream — Deutsch (de_DE) — Vollständig
+# ──────────────────────────────────────────────────────────────────────────────
+DoliStreamName = DoliStream
+DoliStreamDesc = Massengenerierung und -löschung von Testdaten für die Dolibarr-Entwicklung.
+DoliStreamWarningDevOnly = ACHTUNG: Dieses Modul ist NUR FÜR DIE ENTWICKLUNG. Niemals in Produktion aktivieren!
+DoliStreamSetup = DoliStream-Konfiguration
+DoliStreamSetupDesc = Werkzeug zur Generierung und Bereinigung von Testdaten. Zugang nur für Administratoren.
+DoliStream = DoliStream
+Setup = Konfiguration
+About = Über
+Generate = Generieren
+PurgeData = Daten bereinigen
+Tiers = Partner
+Products = Produkte
+Invoices = Rechnungen
+Orders = Bestellungen
+Proposals = Angebote
+# ── Skript-Bezeichnungen ───────────────────────────────────────────────────────
+GenerateThirdparties = Partner generieren
+GenerateProducts = Produkte generieren
+GenerateInvoices = Rechnungen generieren
+GenerateOrders = Bestellungen generieren
+GenerateProposals = Angebote generieren
+GenerateProjects = Projekte / Chancen generieren
+GenerateStock = Lagerbestand generieren
+GenerateWarehouses = Lager generieren
+GenerateShipments = Lieferungen generieren
+GenerateSupplierOrders = Lieferantenbestellungen generieren
+GenerateSupplierReceptions = Wareneingänge generieren
+GenerateSupplierInvoices = Lieferantenrechnungen generieren
+# ── Skript-Hinweise ────────────────────────────────────────────────────────────
+HintThirdparty = Erstellt Unternehmen mit zufälligen Namen, Städten und Kontakten. Erforderlich vor der Dokumentengenerierung.
+HintProduct = Fügt Produkte/Dienstleistungen mit zufälligen Typen, Preisen und Lagerbestand ein.
+HintInvoice = Erstellt validierte Kundenrechnungen mit zufällig ausgewählten vorhandenen Partnern und Produkten.
+HintOrder = Erstellt validierte Kundenbestellungen mit zufällig ausgewählten vorhandenen Partnern und Produkten.
+HintProposal = Erstellt Angebote mit zufälligen vorhandenen Partnern und Produkten.
+HintProject = Erstellt Projekte mit Chancenverfolgung (zufälliger Status und Betrag).
+HintStock = Fügt zufälligen Lagerbestand zu vorhandenen Produkten in vorhandenen Lagern hinzu. Voraussetzung: Produkte und mindestens ein Lager.
+HintWarehouse = Erstellt sequenziell nummerierte Lager. Nützlich als Voraussetzung vor der Liefergenerierung mit Lagerverwaltung.
+HintShipment = Erstellt Lieferungen aus bestehenden validierten Kundenbestellungen.
+HintSupplierOrder = Erstellt validierte Lieferantenbestellungen mit zufälligen Lieferantenpartnern und Produkten.
+HintSupplierReception = Erstellt Wareneingänge aus bestehenden validierten Lieferantenbestellungen.
+HintSupplierInvoice = Erstellt validierte Lieferantenrechnungen mit zufälligen Lieferantenpartnern und Produkten.
+HintPurge = Beginnen Sie IMMER mit dem Modus "test", um zu sehen, was gelöscht würde. Modus "confirm" löscht die Daten tatsächlich.
+DangerPurge = Dieses Skript kann Daten DAUERHAFT LÖSCHEN. NICHT in der Produktion verwenden.
+# ── Formular ───────────────────────────────────────────────────────────────────
+NumberToGenerate = Anzahl generieren
+ExecutionMode = Ausführungsmodus
+CategoryToPurge = Kategorie bereinigen
+BeforeDate = Vor Datum
+RunScript = Ausführen
+StopScript = ◼ Stopp
+# ── Fehlermeldungen ────────────────────────────────────────────────────────────
+NoClientThirdparty = Kein Kundenpartner gefunden. Bitte zuerst Partner generieren.
+NoProduct = Kein verkäufliches Produkt gefunden. Bitte zuerst Produkte generieren.
+NoAdminUser = Kein Benutzer mit Login "admin" gefunden. Bitte zuerst einen anlegen.
+NoResultFromDb = Kein Element aus der Datenbank zurückgegeben (Protokolle prüfen).
+SelectScriptFromMenu = Wählen Sie ein Skript im linken Menü aus.
+# ── Ergebnisse und UI ──────────────────────────────────────────────────────────
+ExecutionResult = Ausführungsergebnis
+ScriptOutput = Skript-Ausgabe
+ResultSuccess = Erfolg
+ResultErrors = Fehler
+CopyOutput = Kopieren
+ClearConsole = Leeren
+RefreshStats = Statistiken aktualisieren
+TestMode = Testmodus (Simulation, nichts wird gelöscht)
+ConfirmMode = Bestätigungsmodus (ECHTE LÖSCHUNG)
+AllCategories = all (alle Kategorien)
+AllDates = all (alle Daten)
+AdminOnly = Nur Administratoren
+MainPage = Hauptseite
+CreatedElements = Erstellte Elemente
+Prerequisites = Voraussetzungen
+ConsolePanel = Konsole
+SeeActionComm = 📌 Aufgezeichneten ActionComm anzeigen
+SerialQtyForcedToOne = Menge auf 1 gesetzt (eindeutige Seriennummer pro Einheit)
+ExecutionAbortedByUser = Ausführung vom Benutzer abgebrochen.
+# ── Statistiken ────────────────────────────────────────────────────────────────
+StatsThirdparties = Partner in DB
+StatsProducts = Produkte in DB
+StatsInvoices = Rechnungen in DB
+StatsOrders = Bestellungen in DB
+StatsProposals = Angebote in DB
+StatsProjects = Projekte/Chancen
+# ── Tabellenspalten ────────────────────────────────────────────────────────────
+ColNameCompany = Name / Unternehmen
+ColCreatedAt = Erstellt am
+ColModifiedAt = Geändert am
+ColPriceHT = Preis netto
+ColOppAmount = Chance-Betrag
+ColOppStatus = Chance-Status
+ColReceptionDate = Eingangsdatum
+ColPlace = Ort
+ColOperation = Vorgang
+ColDetail = Detail
+# ── Formularfelder ─────────────────────────────────────────────────────────────
+FieldThirdpartyType = Partnertyp
+FieldProductType = Typ
+FieldNumber = Anzahl
+FieldBatchMode = Chargen/Serien
+FieldAddStock = Lagerbestand hinzufügen
+FieldStockQtyMax = Max. Lagermenge
+FieldNbMovements = Anzahl Bewegungen
+FieldQtyMaxPerMov = Max. Menge / Bew.
+FieldProductTypeFilter = Produkttyp
+FieldRefPrefix = Referenzpräfix
+FieldThirdpartyLinkMode = Partner-Verknüpfungsmodus
+FieldRefPrefixPlaceholder = z. B. LA, DEP, LAGER
+# ── Auswahloptionen ────────────────────────────────────────────────────────────
+OptRandomMix = Zufällig (alle Typen gemischt)
+OptClient = Kunde
+OptSupplier = Lieferant
+OptClientAndSupplier = Kunde & Lieferant
+OptRandom = Zufällig
+OptNoBatch = Ohne Charge/Serie
+OptLotNumbers = Chargennummern
+OptSerialNumbers = Seriennummern
+OptSerialNumbers1u = Seriennummern (1 St./Serie)
+OptYes = Ja
+OptNo = Nein
+OptAll = Alle
+OptProductsOnly = Nur Produkte
+OptServicesOnly = Nur Dienstleistungen
+OptFreeProject = Freies Projekt (ohne Partner)
+OptLinkedThirdparty = Verknüpft mit zufälligem Partner
+# ── Bereinigungskategorien ─────────────────────────────────────────────────────
+PurgeCatInvoice = Kundenrechnungen
+PurgeCatOrder = Kundenbestellungen
+PurgeCatProposal = Angebote
+PurgeCatProduct = Produkte
+PurgeCatContact = Kontakte
+PurgeCatThirdparty = Partner
+PurgeCatPayment = Zahlungen
+PurgeCatProject = Projekte
+PurgeCatBank = Bank
+PurgeCatEvent = Ereignisse
+PurgeCatUser = Benutzer
+# ── Konsolen-Protokollmeldungen ────────────────────────────────────────────────
+LogBatchModuleDisabled = ⚠ Chargen-/Serienmodul nicht aktiv → Nummerierung deaktiviert
+LogNoWarehouse = ⚠ Kein offenes Lager — Lagerbestand ignoriert. Erstellen Sie eines unter Voraussetzungen > Lager.
+LogNoProduct = ✗ Kein Produkt gefunden. Bitte zuerst Produkte generieren.
+LogNoSupplier = ❌ Kein Lieferant gefunden. Bitte zuerst Partner vom Typ Lieferant generieren.
+LogNoValidatedOrder = ❌ Keine validierte Kundenbestellung gefunden. Bitte zuerst Kundenbestellungen generieren.
+LogNoValidatedSupplierOrder = ❌ Keine validierte Lieferantenbestellung. Bitte zuerst Lieferantenbestellungen generieren.
+LogReceptionModuleUnavailable = ❌ Wareneingangsmodul in dieser Dolibarr-Version nicht verfügbar.
+LogInvalidMode = ❌ Ungültiger Modus. Verwenden Sie "test" oder "confirm".
+LogInvalidDate = ❌ Ungültiges Datum. Erwartetes Format: YYYY-MM-DD oder "all".
+LogTestModeNothing = → (Testmodus: Es wird nichts gelöscht)
+LogRollback = ✘ Fehler festgestellt — ROLLBACK durchgeführt
+LogCommit = ✔ Transaktion bestätigt (COMMIT)
+LogTestFinished = ℹ Testmodus abgeschlossen — keine Daten wurden geändert.
+
+FieldNumberPerProposal=Anzahl Produkte pro Angebot
+# ── Workflows ──────────────────────────────────────────────────────────────────
+Workflow = Workflow
+WorkflowOppClPr = OPP+CL+PR
+WorkflowOppClPrTitle = Workflow OPP+CL+PR (Verkaufschance + Kunde + Angebot)
+HintWorkflowOppClPr = Jeder Durchlauf erstellt einen Kunden, eine mit diesem Kunden verknüpfte Verkaufschance (Projekt) und ein Angebot zu dieser Verkaufschance. Der Chancenbetrag wird an die Angebotssumme (netto) angeglichen.
+FieldNbWorkflowRuns = Anzahl Durchläufe
+ColOpportunity = Verkaufschance

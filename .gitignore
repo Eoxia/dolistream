@@ -1,0 +1,24 @@
+# Dolibarr generated files
+documents/
+conf/conf.php
+*.bak
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# Composer
+vendor/
+
+# PHP cache
+*.cache
+
+# Scratch scripts (debug / temp — jamais commités)
+scratch/

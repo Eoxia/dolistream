@@ -1,0 +1,11 @@
+/**
+ * DoliStream — CSS global
+ * Corrige le filter: saturate(0) que Dolibarr génère automatiquement
+ * sur div.mainmenu.dolistream (icône background-image dans la topbar)
+ */
+
+/* Dolibarr génère : div.mainmenu.dolistream { filter: saturate(0); }
+   On le remet à 1 pour conserver les couleurs du logo */
+div.mainmenu.dolistream {
+    filter: saturate(1) !important;
+}
