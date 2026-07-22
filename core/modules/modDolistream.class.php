@@ -55,7 +55,7 @@ class modDolistream extends DolibarrModules
 		$this->editor_squarred_logo = 'custom/dolistream/img/logo.png';
 
 		// ── Version ──────────────────────────────────────────────────────────
-		$this->version = '1.0.0';
+		$this->version = '23.0.1';
 
 		// ── Clé constante d'activation ───────────────────────────────────────
 		$this->const_name = 'MAIN_MODULE_' . strtoupper($this->name);

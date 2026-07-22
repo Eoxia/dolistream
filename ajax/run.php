@@ -74,4 +74,4 @@ if (!empty($dolibarr_main_prod)) {
 //   • skip du re-bootstrap (guard en haut de index.php)
 //   • exécution du bloc action=run normalement
 //   • sortie JSON avant llxHeader() / rendu HTML
-require DOL_DOCUMENT_ROOT . '/custom/dolistream/view/index.php';
+dol_include_once('/dolistream/view/index.php');
