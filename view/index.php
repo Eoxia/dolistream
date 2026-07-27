@@ -132,8 +132,8 @@ function dsLog(string $msg, string $level = 'info'): void
 $dsDbConf = array(
 	'generate-thirdparty' => array(
 		'table'  => 'societe',
-		'head'   => array($langs->transnoentitiesnoconv('ColNameCompany'), $langs->transnoentitiesnoconv('Type'), $langs->transnoentitiesnoconv('CustomerCode'), $langs->transnoentitiesnoconv('ColCreatedAt')),
-		'select' => "SELECT s.rowid, s.nom, IF(s.client IN(1,2),'Client',IF(s.fournisseur=1,'Fournisseur','Autre')) AS type, IFNULL(s.code_client,'—') AS cc, DATE_FORMAT(DATE_ADD(s.datec, INTERVAL TIME_TO_SEC(TIMEDIFF(NOW(),UTC_TIMESTAMP())) SECOND),'%d/%m/%Y %H:%i') AS cree_le FROM " . MAIN_DB_PREFIX . "societe s ORDER BY s.rowid DESC LIMIT {NB}",
+		'head'   => array($langs->transnoentitiesnoconv('ColNameCompany'), $langs->transnoentitiesnoconv('Type'), $langs->transnoentitiesnoconv('CustomerCode').' / '.$langs->transnoentitiesnoconv('SupplierCode'), $langs->transnoentitiesnoconv('ColCreatedAt')),
+		'select' => "SELECT s.rowid, s.nom, IF(s.client IN(1,2),'Client',IF(s.fournisseur=1,'Fournisseur','Autre')) AS type, COALESCE(NULLIF(s.code_client,''), NULLIF(s.code_fournisseur,''), '—') AS cc, DATE_FORMAT(DATE_ADD(s.datec, INTERVAL TIME_TO_SEC(TIMEDIFF(NOW(),UTC_TIMESTAMP())) SECOND),'%d/%m/%Y %H:%i') AS cree_le FROM " . MAIN_DB_PREFIX . "societe s ORDER BY s.rowid DESC LIMIT {NB}",
 		'url'    => '/societe/card.php?socid=',
 	),
 	'generate-product' => array(
