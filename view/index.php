@@ -13,6 +13,7 @@
 
 // ── Bootstrap Dolibarr ───────────────────────────────────────────────────────
 // Guard : si ajax/run.php a déjà chargé main.inc.php, on l'ignore
+global $db, $user, $conf, $langs;
 if (defined('DOLISTREAM_AJAX_RUN') && isset($db)) {
 	$res = 1; // déjà bootstrapé
 } else {
@@ -50,7 +51,7 @@ require_once DOL_DOCUMENT_ROOT . '/fourn/class/fournisseur.facture.class.php';
 if (file_exists(DOL_DOCUMENT_ROOT . '/reception/class/reception.class.php')) {
 	require_once DOL_DOCUMENT_ROOT . '/reception/class/reception.class.php';
 }
-require_once '../lib/dolistream.lib.php';
+require_once __DIR__ . '/../lib/dolistream.lib.php';
 require_once DOL_DOCUMENT_ROOT . '/comm/action/class/actioncomm.class.php';
 
 
@@ -77,6 +78,7 @@ $urlOpt = GETPOST('opt',    'alpha'); // pré-sélection depuis l'URL (ex: opt=s
 $page   = max(0, (int) GETPOST('page', 'int')); // pagination des résultats
 
 // ── Progression (fichier temp pour éviter le lock de session) ─────────────────
+global $dsProgressFile;
 $dsProgressFile = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'ds_progress_' . session_id() . '.json';
 
 /** Retourne la progression courante en JSON (handler AJAX) */
@@ -102,6 +104,7 @@ function dolinstreamProgress(int $current, int $total, bool $done = false): void
 }
 
 // ── Log d'exécution ───────────────────────────────────────────────────────────
+global $scriptLog, $dsLiveLogFile;
 $scriptLog = array();
 
 /**
@@ -129,8 +132,8 @@ function dsLog(string $msg, string $level = 'info'): void
 $dsDbConf = array(
 	'generate-thirdparty' => array(
 		'table'  => 'societe',
-		'head'   => array($langs->transnoentitiesnoconv('ColNameCompany'), $langs->transnoentitiesnoconv('Type'), $langs->transnoentitiesnoconv('CustomerCode'), $langs->transnoentitiesnoconv('ColCreatedAt')),
-		'select' => "SELECT s.rowid, s.nom, IF(s.client IN(1,2),'Client',IF(s.fournisseur=1,'Fournisseur','Autre')) AS type, IFNULL(s.code_client,'—') AS cc, DATE_FORMAT(DATE_ADD(s.datec, INTERVAL TIME_TO_SEC(TIMEDIFF(NOW(),UTC_TIMESTAMP())) SECOND),'%d/%m/%Y %H:%i') AS cree_le FROM " . MAIN_DB_PREFIX . "societe s ORDER BY s.rowid DESC LIMIT {NB}",
+		'head'   => array($langs->transnoentitiesnoconv('ColNameCompany'), $langs->transnoentitiesnoconv('Type'), $langs->transnoentitiesnoconv('CustomerCode').' / '.$langs->transnoentitiesnoconv('SupplierCode'), $langs->transnoentitiesnoconv('ColCreatedAt')),
+		'select' => "SELECT s.rowid, s.nom, IF(s.client IN(1,2),'Client',IF(s.fournisseur=1,'Fournisseur','Autre')) AS type, COALESCE(NULLIF(s.code_client,''), NULLIF(s.code_fournisseur,''), '—') AS cc, DATE_FORMAT(DATE_ADD(s.datec, INTERVAL TIME_TO_SEC(TIMEDIFF(NOW(),UTC_TIMESTAMP())) SECOND),'%d/%m/%Y %H:%i') AS cree_le FROM " . MAIN_DB_PREFIX . "societe s ORDER BY s.rowid DESC LIMIT {NB}",
 		'url'    => '/societe/card.php?socid=',
 	),
 	'generate-product' => array(
@@ -162,6 +165,18 @@ $dsDbConf = array(
 		'head'   => array($langs->transnoentitiesnoconv('Title'), $langs->transnoentitiesnoconv('ColOppAmount'), $langs->transnoentitiesnoconv('Budget'), $langs->transnoentitiesnoconv('ColCreatedAt')),
 		'select' => "SELECT p.rowid, p.ref, p.title, CONCAT(FORMAT(IFNULL(p.opp_amount,0),0),' €') AS opp, CONCAT(FORMAT(IFNULL(p.budget_amount,0),0),' €') AS budget, DATE_FORMAT(DATE_ADD(p.datec, INTERVAL TIME_TO_SEC(TIMEDIFF(NOW(),UTC_TIMESTAMP())) SECOND),'%d/%m/%Y %H:%i') AS cree_le FROM " . MAIN_DB_PREFIX . "projet p ORDER BY p.rowid DESC LIMIT {NB}",
 		'url'    => '/projet/card.php?id=',
+	),
+	'generate-warehouse' => array(
+		'table'  => 'entrepot',
+		'head'   => array($langs->transnoentitiesnoconv('Ref'), $langs->transnoentitiesnoconv('Label'), $langs->transnoentitiesnoconv('City'), $langs->transnoentitiesnoconv('Status'), $langs->transnoentitiesnoconv('ColCreatedAt')),
+		'select' => "SELECT e.rowid, e.ref, e.label, e.town, IF(e.statut=1,'Actif','Inactif') AS statut, DATE_FORMAT(DATE_ADD(e.datec, INTERVAL TIME_TO_SEC(TIMEDIFF(NOW(),UTC_TIMESTAMP())) SECOND),'%d/%m/%Y %H:%i') AS cree_le FROM " . MAIN_DB_PREFIX . "entrepot e ORDER BY e.rowid DESC LIMIT {NB}",
+		'url'    => '/product/stock/card.php?id=',
+	),
+	'generate-stock' => array(
+		'table'  => 'stock_mouvement',
+		'head'   => array($langs->transnoentitiesnoconv('Product'), $langs->transnoentitiesnoconv('Warehouse'), $langs->transnoentitiesnoconv('Quantity'), $langs->transnoentitiesnoconv('Batch'), $langs->transnoentitiesnoconv('ColCreatedAt')),
+		'select' => "SELECT m.rowid, m.rowid AS ref, p.ref AS product, e.ref AS warehouse, CONCAT('+',m.value) AS qty, IFNULL(m.batch,'—') AS batch, DATE_FORMAT(DATE_ADD(m.datem, INTERVAL TIME_TO_SEC(TIMEDIFF(NOW(),UTC_TIMESTAMP())) SECOND),'%d/%m/%Y %H:%i') AS cree_le FROM " . MAIN_DB_PREFIX . "stock_mouvement m LEFT JOIN " . MAIN_DB_PREFIX . "product p ON m.fk_product=p.rowid LEFT JOIN " . MAIN_DB_PREFIX . "entrepot e ON m.fk_entrepot=e.rowid ORDER BY m.rowid DESC LIMIT {NB}",
+		'url'    => '',
 	),
 	'generate-expedition' => array(
 		'table'  => 'expedition',
@@ -763,6 +778,8 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 		dsLog($langs->transnoentities('GenerateInvoices') . ' : ' . $total_invoices . ' (' . count($socids) . ' tiers, ' . count($prodids) . ' produits)');
 		$ok = $ko = 0;
 
+		sort($dates);
+
 		foreach ($dates as $idx => $inv_date) {
 			$obj                    = new Facture($db);
 			$obj->socid             = $socids[array_rand($socids)];
@@ -837,10 +854,12 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 		dsLog($langs->transnoentities('GenerateOrders') . ' : ' . $nb);
 		$ok = $ko = 0;
 
+		sort($dates);
+
 		for ($s = 0; $s < $nb; $s++) {
 			$obj                     = new Commande($db);
 			$obj->socid              = $socids[array_rand($socids)];
-			$obj->date_commande      = $dates[array_rand($dates)];
+			$obj->date_commande      = $dates[$s % count($dates)]; // Use sequential instead of random to preserve order
 			$obj->note               = 'Généré par DoliStream';
 			$obj->source             = 1;
 			$obj->fk_project         = 0;
@@ -949,10 +968,12 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 		dsLog($langs->transnoentities('GenerateProposals') . ' : ' . $nb . ' (type=' . $lineTypeLabel . ', nbP=' . $nbProducts . ', qP=' . $qtyPerProduct . ', nbS=' . $nbServices . ', qS=' . $qtyPerService . ')');
 		$ok = $ko = 0;
 
+		sort($dates);
+
 		for ($s = 0; $s < $nb; $s++) {
 			$obj                    = new Propal($db);
 			$obj->socid             = $socids[array_rand($socids)];
-			$obj->date              = $dates[array_rand($dates)];
+			$obj->date              = $dates[$s % count($dates)]; // Sequential instead of random
 			$obj->date_fin_validite = $obj->date + (30 * 24 * 3600);
 			$obj->cond_reglement_id = 3;
 			$obj->mode_reglement_id = 3;
@@ -1567,7 +1588,20 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 		dsLog('Générer des entrepôts : ' . $nb . ' (préfixe=' . $prefix . ')');
 		$ok = $ko = 0;
 
-		for ($s = 1; $s <= $nb; $s++) {
+		$start_index = 1;
+		$sql = "SELECT ref FROM " . MAIN_DB_PREFIX . "entrepot WHERE ref LIKE '" . $db->escape($prefix) . "-%'";
+		$res = $db->query($sql);
+		if ($res) {
+			while ($obj = $db->fetch_object($res)) {
+				if (preg_match('/-(\d+)$/', $obj->ref, $matches)) {
+					$idx = (int)$matches[1];
+					if ($idx >= $start_index) $start_index = $idx + 1;
+				}
+			}
+		}
+
+		for ($i = 0; $i < $nb; $i++) {
+			$s = $start_index + $i;
 			$wh              = new Entrepot($db);
 			$wh->ref         = $prefix . '-' . sprintf('%03d', $s);
 			$wh->label       = 'Entrepôt ' . $prefix . '-' . sprintf('%03d', $s);
