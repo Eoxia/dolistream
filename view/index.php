@@ -778,6 +778,8 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 		dsLog($langs->transnoentities('GenerateInvoices') . ' : ' . $total_invoices . ' (' . count($socids) . ' tiers, ' . count($prodids) . ' produits)');
 		$ok = $ko = 0;
 
+		sort($dates);
+
 		foreach ($dates as $idx => $inv_date) {
 			$obj                    = new Facture($db);
 			$obj->socid             = $socids[array_rand($socids)];
@@ -852,10 +854,12 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 		dsLog($langs->transnoentities('GenerateOrders') . ' : ' . $nb);
 		$ok = $ko = 0;
 
+		sort($dates);
+
 		for ($s = 0; $s < $nb; $s++) {
 			$obj                     = new Commande($db);
 			$obj->socid              = $socids[array_rand($socids)];
-			$obj->date_commande      = $dates[array_rand($dates)];
+			$obj->date_commande      = $dates[$s % count($dates)]; // Use sequential instead of random to preserve order
 			$obj->note               = 'Généré par DoliStream';
 			$obj->source             = 1;
 			$obj->fk_project         = 0;
@@ -964,10 +968,12 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 		dsLog($langs->transnoentities('GenerateProposals') . ' : ' . $nb . ' (type=' . $lineTypeLabel . ', nbP=' . $nbProducts . ', qP=' . $qtyPerProduct . ', nbS=' . $nbServices . ', qS=' . $qtyPerService . ')');
 		$ok = $ko = 0;
 
+		sort($dates);
+
 		for ($s = 0; $s < $nb; $s++) {
 			$obj                    = new Propal($db);
 			$obj->socid             = $socids[array_rand($socids)];
-			$obj->date              = $dates[array_rand($dates)];
+			$obj->date              = $dates[$s % count($dates)]; // Sequential instead of random
 			$obj->date_fin_validite = $obj->date + (30 * 24 * 3600);
 			$obj->cond_reglement_id = 3;
 			$obj->mode_reglement_id = 3;
@@ -1583,12 +1589,14 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 		$ok = $ko = 0;
 
 		$start_index = 1;
-		$sql = "SELECT ref FROM " . MAIN_DB_PREFIX . "entrepot WHERE ref LIKE '" . $db->escape($prefix) . "-%' ORDER BY ref DESC LIMIT 1";
+		$sql = "SELECT ref FROM " . MAIN_DB_PREFIX . "entrepot WHERE ref LIKE '" . $db->escape($prefix) . "-%'";
 		$res = $db->query($sql);
-		if ($res && $db->num_rows($res) > 0) {
-			$obj = $db->fetch_object($res);
-			if (preg_match('/-(\d+)$/', $obj->ref, $matches)) {
-				$start_index = (int)$matches[1] + 1;
+		if ($res) {
+			while ($obj = $db->fetch_object($res)) {
+				if (preg_match('/-(\d+)$/', $obj->ref, $matches)) {
+					$idx = (int)$matches[1];
+					if ($idx >= $start_index) $start_index = $idx + 1;
+				}
 			}
 		}
 

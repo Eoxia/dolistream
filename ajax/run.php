@@ -17,7 +17,7 @@
 if (!defined('NOTOKENRENEWAL')) define('NOTOKENRENEWAL', 1);  // Pas de renouvellement CSRF
 if (!defined('NOREQUIREMENU'))  define('NOREQUIREMENU', '1'); // Pas de rendu menu
 if (!defined('NOREQUIREHTML'))  define('NOREQUIREHTML', '1'); // Pas d'en-têtes HTML
-if (!defined('NOREQUIRESOC'))   define('NOREQUIRESOC', '1');  // Pas de session societe
+// if (!defined('NOREQUIRESOC'))   define('NOREQUIRESOC', '1');  // Pas de session societe - REMOVED: Facture->create() and addline() need $mysoc->country_code to compute VAT/taxes
 
 // ── Signal à view/index.php : mode AJAX, retourner JSON et sortir ─────────────
 define('DOLISTREAM_AJAX_RUN', 1);
