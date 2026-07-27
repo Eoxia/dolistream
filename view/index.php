@@ -1576,7 +1576,18 @@ if ($action === 'run' && !empty($script) && (int) GETPOST('token_check') >= 0) {
 		dsLog('Générer des entrepôts : ' . $nb . ' (préfixe=' . $prefix . ')');
 		$ok = $ko = 0;
 
-		for ($s = 1; $s <= $nb; $s++) {
+		$start_index = 1;
+		$sql = "SELECT ref FROM " . MAIN_DB_PREFIX . "entrepot WHERE ref LIKE '" . $db->escape($prefix) . "-%' ORDER BY ref DESC LIMIT 1";
+		$res = $db->query($sql);
+		if ($res && $db->num_rows($res) > 0) {
+			$obj = $db->fetch_object($res);
+			if (preg_match('/-(\d+)$/', $obj->ref, $matches)) {
+				$start_index = (int)$matches[1] + 1;
+			}
+		}
+
+		for ($i = 0; $i < $nb; $i++) {
+			$s = $start_index + $i;
 			$wh              = new Entrepot($db);
 			$wh->ref         = $prefix . '-' . sprintf('%03d', $s);
 			$wh->label       = 'Entrepôt ' . $prefix . '-' . sprintf('%03d', $s);
