@@ -172,6 +172,12 @@ $dsDbConf = array(
 		'select' => "SELECT e.rowid, e.ref, e.label, e.town, IF(e.statut=1,'Actif','Inactif') AS statut, DATE_FORMAT(DATE_ADD(e.datec, INTERVAL TIME_TO_SEC(TIMEDIFF(NOW(),UTC_TIMESTAMP())) SECOND),'%d/%m/%Y %H:%i') AS cree_le FROM " . MAIN_DB_PREFIX . "entrepot e ORDER BY e.rowid DESC LIMIT {NB}",
 		'url'    => '/product/stock/card.php?id=',
 	),
+	'generate-stock' => array(
+		'table'  => 'stock_mouvement',
+		'head'   => array($langs->transnoentitiesnoconv('Product'), $langs->transnoentitiesnoconv('Warehouse'), $langs->transnoentitiesnoconv('Quantity'), $langs->transnoentitiesnoconv('Batch'), $langs->transnoentitiesnoconv('ColCreatedAt')),
+		'select' => "SELECT m.rowid, m.rowid AS ref, p.ref AS product, e.ref AS warehouse, CONCAT('+',m.value) AS qty, IFNULL(m.batch,'—') AS batch, DATE_FORMAT(DATE_ADD(m.datem, INTERVAL TIME_TO_SEC(TIMEDIFF(NOW(),UTC_TIMESTAMP())) SECOND),'%d/%m/%Y %H:%i') AS cree_le FROM " . MAIN_DB_PREFIX . "stock_mouvement m LEFT JOIN " . MAIN_DB_PREFIX . "product p ON m.fk_product=p.rowid LEFT JOIN " . MAIN_DB_PREFIX . "entrepot e ON m.fk_entrepot=e.rowid ORDER BY m.rowid DESC LIMIT {NB}",
+		'url'    => '',
+	),
 	'generate-expedition' => array(
 		'table'  => 'expedition',
 		'head'   => array($langs->transnoentitiesnoconv('ThirdParty'), $langs->transnoentitiesnoconv('DeliveryDate'), $langs->transnoentitiesnoconv('Status'), $langs->transnoentitiesnoconv('ColCreatedAt')),
