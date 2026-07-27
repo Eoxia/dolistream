@@ -78,6 +78,7 @@ $urlOpt = GETPOST('opt',    'alpha'); // pré-sélection depuis l'URL (ex: opt=s
 $page   = max(0, (int) GETPOST('page', 'int')); // pagination des résultats
 
 // ── Progression (fichier temp pour éviter le lock de session) ─────────────────
+global $dsProgressFile;
 $dsProgressFile = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'ds_progress_' . session_id() . '.json';
 
 /** Retourne la progression courante en JSON (handler AJAX) */
@@ -103,6 +104,7 @@ function dolinstreamProgress(int $current, int $total, bool $done = false): void
 }
 
 // ── Log d'exécution ───────────────────────────────────────────────────────────
+global $scriptLog, $dsLiveLogFile;
 $scriptLog = array();
 
 /**
