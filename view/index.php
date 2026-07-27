@@ -13,6 +13,7 @@
 
 // ── Bootstrap Dolibarr ───────────────────────────────────────────────────────
 // Guard : si ajax/run.php a déjà chargé main.inc.php, on l'ignore
+global $db, $user, $conf, $langs;
 if (defined('DOLISTREAM_AJAX_RUN') && isset($db)) {
 	$res = 1; // déjà bootstrapé
 } else {
