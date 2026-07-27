@@ -50,7 +50,7 @@ require_once DOL_DOCUMENT_ROOT . '/fourn/class/fournisseur.facture.class.php';
 if (file_exists(DOL_DOCUMENT_ROOT . '/reception/class/reception.class.php')) {
 	require_once DOL_DOCUMENT_ROOT . '/reception/class/reception.class.php';
 }
-require_once '../lib/dolistream.lib.php';
+require_once __DIR__ . '/../lib/dolistream.lib.php';
 require_once DOL_DOCUMENT_ROOT . '/comm/action/class/actioncomm.class.php';
 
 
