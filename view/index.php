@@ -166,6 +166,12 @@ $dsDbConf = array(
 		'select' => "SELECT p.rowid, p.ref, p.title, CONCAT(FORMAT(IFNULL(p.opp_amount,0),0),' €') AS opp, CONCAT(FORMAT(IFNULL(p.budget_amount,0),0),' €') AS budget, DATE_FORMAT(DATE_ADD(p.datec, INTERVAL TIME_TO_SEC(TIMEDIFF(NOW(),UTC_TIMESTAMP())) SECOND),'%d/%m/%Y %H:%i') AS cree_le FROM " . MAIN_DB_PREFIX . "projet p ORDER BY p.rowid DESC LIMIT {NB}",
 		'url'    => '/projet/card.php?id=',
 	),
+	'generate-warehouse' => array(
+		'table'  => 'entrepot',
+		'head'   => array($langs->transnoentitiesnoconv('Ref'), $langs->transnoentitiesnoconv('Label'), $langs->transnoentitiesnoconv('City'), $langs->transnoentitiesnoconv('Status'), $langs->transnoentitiesnoconv('ColCreatedAt')),
+		'select' => "SELECT e.rowid, e.ref, e.label, e.town, IF(e.statut=1,'Actif','Inactif') AS statut, DATE_FORMAT(DATE_ADD(e.datec, INTERVAL TIME_TO_SEC(TIMEDIFF(NOW(),UTC_TIMESTAMP())) SECOND),'%d/%m/%Y %H:%i') AS cree_le FROM " . MAIN_DB_PREFIX . "entrepot e ORDER BY e.rowid DESC LIMIT {NB}",
+		'url'    => '/product/stock/card.php?id=',
+	),
 	'generate-expedition' => array(
 		'table'  => 'expedition',
 		'head'   => array($langs->transnoentitiesnoconv('ThirdParty'), $langs->transnoentitiesnoconv('DeliveryDate'), $langs->transnoentitiesnoconv('Status'), $langs->transnoentitiesnoconv('ColCreatedAt')),
