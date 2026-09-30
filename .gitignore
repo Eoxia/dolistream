@@ -22,3 +22,7 @@ vendor/
 
 # Scratch scripts (debug / temp — jamais commités)
 scratch/
+# Composer managed dependencies
+/vendor
+# PHPStan cache
+/.github/tmp/phpstan

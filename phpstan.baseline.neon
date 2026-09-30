@@ -1,0 +1,313 @@
+parameters:
+	ignoreErrors:
+		-
+			message: '#^Negated boolean expression is always true\.$#'
+			identifier: booleanNot.alwaysTrue
+			count: 1
+			path: admin/about.php
+
+		-
+			message: '#^Variable \$db might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/about.php
+
+		-
+			message: '#^Variable \$langs might not be defined\.$#'
+			identifier: variable.undefined
+			count: 10
+			path: admin/about.php
+
+		-
+			message: '#^Variable \$user might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/about.php
+
+		-
+			message: '#^Negated boolean expression is always true\.$#'
+			identifier: booleanNot.alwaysTrue
+			count: 1
+			path: admin/external.php
+
+		-
+			message: '#^Variable \$db might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/external.php
+
+		-
+			message: '#^Variable \$langs might not be defined\.$#'
+			identifier: variable.undefined
+			count: 12
+			path: admin/external.php
+
+		-
+			message: '#^Variable \$user might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/external.php
+
+		-
+			message: '#^Negated boolean expression is always true\.$#'
+			identifier: booleanNot.alwaysTrue
+			count: 1
+			path: admin/setup.php
+
+		-
+			message: '#^Variable \$db might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/setup.php
+
+		-
+			message: '#^Variable \$hookmanager might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/setup.php
+
+		-
+			message: '#^Variable \$langs might not be defined\.$#'
+			identifier: variable.undefined
+			count: 15
+			path: admin/setup.php
+
+		-
+			message: '#^Variable \$user might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/setup.php
+
+		-
+			message: '#^Property DolibarrModules\:\:\$menu \(1\|array\<array\{commentgroup\?\: string, mainmenu\: string, leftmenu\: string, langs\: string, enabled\: int\|string, target\: string, titre\: string, user\: int, \.\.\.\}\>\) does not accept non\-empty\-array\<array\{commentgroup\?\: string, mainmenu\: string, leftmenu\: string, langs\: string, enabled\: int\|string, target\: string, titre\: string, user\: int, \.\.\.\}\|array\{fk_menu\: '''', type\: ''top'', titre\: ''DoliStream'', prefix\: string, mainmenu\: ''dolistream'', leftmenu\: '''', url\: ''/dolistream/view…'', langs\: ''dolistream…'', \.\.\.\}\>\.$#'
+			identifier: assign.propertyType
+			count: 1
+			path: core/modules/modDolistream.class.php
+
+		-
+			message: '#^Path in include\(\) "\.\./\.\./\.\./\.\./main\.inc\.php" is not a file or it does not exist\.$#'
+			identifier: include.fileNotFound
+			count: 1
+			path: view/download_log.php
+
+		-
+			message: '#^Variable \$user might not be defined\.$#'
+			identifier: variable.undefined
+			count: 2
+			path: view/download_log.php
+
+		-
+			message: '#^Anonymous function has an unused use \$langs\.$#'
+			identifier: closure.unusedUse
+			count: 1
+			path: view/index.php
+
+		-
+			message: '#^Array has 2 duplicate keys with value ''generate\-stock'' \(''generate\-stock'', ''generate\-stock''\)\.$#'
+			identifier: array.duplicateKey
+			count: 1
+			path: view/index.php
+
+		-
+			message: '#^Array has 2 duplicate keys with value ''generate\-warehouse'' \(''generate\-warehouse'', ''generate\-warehouse''\)\.$#'
+			identifier: array.duplicateKey
+			count: 1
+			path: view/index.php
+
+		-
+			message: '#^Function json_encode invoked with 2 parameters, 1 required\.$#'
+			identifier: arguments.count
+			count: 3
+			path: view/index.php
+
+		-
+			message: '#^Function llxHeader invoked with 14 parameters, 0\-13 required\.$#'
+			identifier: arguments.count
+			count: 1
+			path: view/index.php
+
+		-
+			message: '#^Negated boolean expression is always true\.$#'
+			identifier: booleanNot.alwaysTrue
+			count: 1
+			path: view/index.php
+
+		-
+			message: '#^Offset ''ERR''\|''OK''\|''WRN'' on array\{OK\: ''ds\-log\-s'', ERR\: ''ds\-log\-e'', WRN\: ''ds\-log\-w''\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: view/index.php
+
+		-
+			message: '#^Offset ''time'' on \*NEVER\* on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: view/index.php
+
+		-
+			message: '#^Parameter \#1 \$desc of method CommandeFournisseur\:\:addline\(\) expects string, int given\.$#'
+			identifier: argument.type
+			count: 1
+			path: view/index.php
+
+		-
+			message: '#^Parameter \#1 \$id of method Product\:\:fetch\(\) expects int, string given\.$#'
+			identifier: argument.type
+			count: 1
+			path: view/index.php
+
+		-
+			message: '#^Parameter \#1 \$id of method Project\:\:fetch\(\) expects int, string given\.$#'
+			identifier: argument.type
+			count: 2
+			path: view/index.php
+
+		-
+			message: '#^Parameter \#1 \$string of function str_pad expects string, int\<0, max\> given\.$#'
+			identifier: argument.type
+			count: 1
+			path: view/index.php
+
+		-
+			message: '#^Parameter \#10 \$remise_percent of method CommandeFournisseur\:\:addline\(\) expects float, string given\.$#'
+			identifier: argument.type
+			count: 1
+			path: view/index.php
+
+		-
+			message: '#^Parameter \#11 \$fk_code_ventilation of method FactureFournisseur\:\:addline\(\) expects int, float given\.$#'
+			identifier: argument.type
+			count: 1
+			path: view/index.php
+
+		-
+			message: '#^Parameter \#11 \$price_base_type of method CommandeFournisseur\:\:addline\(\) expects ''HT''\|''TTC'', float given\.$#'
+			identifier: argument.type
+			count: 1
+			path: view/index.php
+
+		-
+			message: '#^Parameter \#12 \$disablenofollow of function llxHeader expects int, string given\.$#'
+			identifier: argument.type
+			count: 1
+			path: view/index.php
+
+		-
+			message: '#^Parameter \#13 \$disablenoindex of function llxHeader expects int, string given\.$#'
+			identifier: argument.type
+			count: 1
+			path: view/index.php
+
+		-
+			message: '#^Parameter \#13 \$fk_remise_except of method Facture\:\:addline\(\) expects int, string given\.$#'
+			identifier: argument.type
+			count: 1
+			path: view/index.php
+
+		-
+			message: '#^Parameter \#2 \$pu_ht of method CommandeFournisseur\:\:addline\(\) expects float, string given\.$#'
+			identifier: argument.type
+			count: 1
+			path: view/index.php
+
+		-
+			message: '#^Parameter \#7 \$fk_product of method Commande\:\:addline\(\) expects int, string given\.$#'
+			identifier: argument.type
+			count: 1
+			path: view/index.php
+
+		-
+			message: '#^Property Commande\:\:\$remise_percent \(string\) does not accept int\.$#'
+			identifier: assign.propertyType
+			count: 2
+			path: view/index.php
+
+		-
+			message: '#^Property Product\:\:\$tva_tx \(float\|int\|string\) on left side of \?\? is not nullable\.$#'
+			identifier: nullCoalesce.property
+			count: 8
+			path: view/index.php
+
+		-
+			message: '#^Property Project\:\:\$socid \(int\) does not accept string\.$#'
+			identifier: assign.propertyType
+			count: 1
+			path: view/index.php
+
+		-
+			message: '#^Property Societe\:\:\$code_client \(string\|null\) does not accept int\.$#'
+			identifier: assign.propertyType
+			count: 2
+			path: view/index.php
+
+		-
+			message: '#^Property Societe\:\:\$code_fournisseur \(string\|null\) does not accept int\.$#'
+			identifier: assign.propertyType
+			count: 1
+			path: view/index.php
+
+		-
+			message: '#^Property Societe\:\:\$remise_percent \(string\) does not accept int\.$#'
+			identifier: assign.propertyType
+			count: 1
+			path: view/index.php
+
+		-
+			message: '#^Result of && is always false\.$#'
+			identifier: booleanAnd.alwaysFalse
+			count: 1
+			path: view/index.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between ''index'' and ''agenda'' will always evaluate to false\.$#'
+			identifier: identical.alwaysFalse
+			count: 1
+			path: view/index.php
+
+		-
+			message: '#^Ternary operator condition is always true\.$#'
+			identifier: ternary.alwaysTrue
+			count: 2
+			path: view/index.php
+
+		-
+			message: '#^Variable \$acId might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: view/index.php
+
+		-
+			message: '#^Variable \$acLabel might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: view/index.php
+
+		-
+			message: '#^Variable \$dbHead might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: view/index.php
+
+		-
+			message: '#^Variable \$dbResults might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: view/index.php
+
+		-
+			message: '#^Variable \$dbUrl might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: view/index.php
+
+		-
+			message: '#^Variable \$fuser might not be defined\.$#'
+			identifier: variable.undefined
+			count: 2
+			path: view/index.php
+
+		-
+			message: '#^Variable \$nb might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: view/index.php
