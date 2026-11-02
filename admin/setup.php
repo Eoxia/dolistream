@@ -62,7 +62,7 @@ include DOL_DOCUMENT_ROOT . '/core/actions_setmoduleoptions.inc.php';
  */
 
 $title = $langs->trans('DoliStreamSetup');
-llxHeader('', $title, '', '', 0, 0, '', '', '', 'mod-dolistream page-admin');
+llxHeader('', $title, '', '', 0, 0, '', dolinstreamGetPageCss(), '', dolinstreamGetBodyClass('page-admin'));
 
 $linkback = '<a href="' . ($backtopage ?: DOL_URL_ROOT . '/admin/modules.php?restore_lastsearch_values=1') . '">'
 	. img_picto($langs->trans('BackToModuleList'), 'back', 'class="pictofixedwidth"')
@@ -84,7 +84,7 @@ print '<tr class="liste_titre"><td>' . $langs->trans('Parameter') . '</td><td>' 
 print '<tr class="oddeven"><td>' . $langs->trans('Version') . '</td><td><strong>1.0.0</strong></td></tr>';
 print '<tr class="oddeven"><td>' . $langs->trans('Access') . '</td><td>' . $langs->trans('AdminOnly') . '</td></tr>';
 print '<tr class="oddeven"><td>' . $langs->trans('MainPage') . '</td>';
-print '<td><a class="butAction" href="' . DOL_URL_ROOT . '/custom/dolistream/view/index.php" style="padding:4px 10px;">';
+print '<td><a class="butAction ds-btn-compact" href="' . DOL_URL_ROOT . '/custom/dolistream/view/index.php">';
 print '▶ ' . $langs->trans('DoliStream') . '</a></td></tr>';
 print '</table>';
 

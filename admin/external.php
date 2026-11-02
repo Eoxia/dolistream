@@ -59,7 +59,7 @@ include DOL_DOCUMENT_ROOT . '/core/actions_setmoduleoptions.inc.php';
  */
 
 $title = $langs->trans('ExternalModules');
-llxHeader('', $title, '', '', 0, 0, '', '', '', 'mod-dolistream page-admin');
+llxHeader('', $title, '', '', 0, 0, '', dolinstreamGetPageCss(), '', dolinstreamGetBodyClass('page-admin'));
 
 $linkback = '<a href="' . ($backtopage ?: DOL_URL_ROOT . '/admin/modules.php?restore_lastsearch_values=1') . '">'
 	. img_picto($langs->trans('BackToModuleList'), 'back', 'class="pictofixedwidth"')

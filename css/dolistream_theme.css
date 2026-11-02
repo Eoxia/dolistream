@@ -1,0 +1,332 @@
+/**
+ * DoliStream: modern back office theme (the one of Digirisk, shared by Saturne).
+ *
+ * DoliStream does not depend on Saturne. When Saturne is enabled, the module pages load
+ * saturne.min.css and get the saturne-theme body class (see dolinstreamGetPageCss() and
+ * dolinstreamGetBodyClass()): Saturne then restyles the native Dolibarr blocks (tabs, lists,
+ * inputs, buttons, left menu) and this file restyles the DoliStream components on top of it,
+ * with the --saturne-* custom properties that the shared theme exposes on that scope.
+ * Every rule is scoped to the DoliStream pages: body#mainbody.saturne-theme.mod-dolistream.
+ */
+
+/* ---- Banners: same recipe as the Saturne notices (tinted, rounded, coloured left edge) ---- */
+
+body#mainbody.saturne-theme.mod-dolistream .ds-warning-banner,
+body#mainbody.saturne-theme.mod-dolistream .ds-danger-banner,
+body#mainbody.saturne-theme.mod-dolistream .ds-hint {
+	gap: 8px;
+	margin-bottom: 14px;
+	padding: 10px 16px;
+	border-radius: var(--saturne-radius);
+	border-left-width: 4px;
+	font-size: 13px;
+	line-height: 1.45;
+}
+
+body#mainbody.saturne-theme.mod-dolistream .ds-warning-banner {
+	border-color: rgba(233, 173, 79, 0.45);
+	border-left-color: var(--saturne-warning);
+	background: var(--saturne-warning-soft);
+	color: #92400e;
+}
+
+body#mainbody.saturne-theme.mod-dolistream .ds-danger-banner {
+	border: 1px solid rgba(224, 83, 83, 0.3);
+	border-left: 4px solid var(--saturne-danger);
+	background: var(--saturne-danger-soft);
+	color: #b91c1c;
+}
+
+body#mainbody.saturne-theme.mod-dolistream .ds-hint {
+	border: 1px solid rgba(13, 138, 255, 0.3);
+	border-left: 4px solid var(--saturne-primary);
+	background: rgba(13, 138, 255, 0.06);
+	color: var(--saturne-text);
+}
+
+/* ---- Database stats, as white pills ---- */
+
+body#mainbody.saturne-theme.mod-dolistream .ds-stats {
+	gap: 6px;
+	margin-bottom: 14px;
+}
+
+body#mainbody.saturne-theme.mod-dolistream .ds-stat-chip {
+	gap: 5px;
+	padding: 4px 10px;
+	border: 1px solid var(--saturne-border);
+	border-radius: var(--saturne-radius-pill);
+	background: var(--saturne-surface);
+	box-shadow: var(--saturne-shadow-sm);
+	color: var(--saturne-text-soft);
+	font-size: 12px;
+}
+
+body#mainbody.saturne-theme.mod-dolistream .ds-stat-chip strong {
+	color: var(--saturne-text);
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+}
+
+body#mainbody.saturne-theme.mod-dolistream a.ds-stats-refresh {
+	padding: 4px 2px;
+	color: var(--saturne-primary-strong);
+	font-size: 12px;
+	font-weight: 600;
+}
+
+body#mainbody.saturne-theme.mod-dolistream a.ds-stats-refresh:hover {
+	color: var(--saturne-primary);
+	text-decoration: none;
+}
+
+/* ---- Script card: white rounded card, picto tile, micro labels ---- */
+
+body#mainbody.saturne-theme.mod-dolistream .ds-run-form {
+	margin: 4px 0 22px;
+}
+
+body#mainbody.saturne-theme.mod-dolistream .ds-action-line {
+	padding: 16px 18px;
+	border: 1px solid var(--saturne-border);
+	border-radius: var(--saturne-radius-lg);
+	background: var(--saturne-surface);
+	box-shadow: var(--saturne-shadow-sm);
+}
+
+body#mainbody.saturne-theme.mod-dolistream .ds-action-head {
+	gap: 12px;
+}
+
+body#mainbody.saturne-theme.mod-dolistream .ds-action-ref {
+	padding: 3px 8px;
+	border-radius: 6px;
+	background: var(--saturne-bg);
+	color: var(--saturne-muted);
+	font-family: ui-monospace, SFMono-Regular, Consolas, 'Courier New', monospace;
+	font-size: 11.5px;
+	font-weight: 700;
+	letter-spacing: 0.02em;
+}
+
+/* The object picto becomes a tile tinted with its own colour (like the kanban cards of Saturne) */
+body#mainbody.saturne-theme.mod-dolistream .ds-action-icon > .fas,
+body#mainbody.saturne-theme.mod-dolistream .ds-action-icon > .far,
+body#mainbody.saturne-theme.mod-dolistream .ds-action-icon > .fa {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 36px;
+	height: 36px;
+	border-radius: var(--saturne-radius);
+	background-color: color-mix(in srgb, currentColor 12%, transparent);
+	font-size: 16px;
+	opacity: 1;
+}
+
+body#mainbody.saturne-theme.mod-dolistream .ds-action-icon > img {
+	box-sizing: border-box;
+	width: 36px;
+	height: 36px;
+	padding: 8px;
+	border-radius: var(--saturne-radius);
+	background: var(--saturne-primary-soft);
+	object-fit: contain;
+}
+
+body#mainbody.saturne-theme.mod-dolistream .ds-action-title {
+	color: var(--saturne-text);
+	font-size: 17px;
+	font-weight: 700;
+	letter-spacing: -0.01em;
+}
+
+body#mainbody.saturne-theme.mod-dolistream .ds-action-buttons {
+	gap: 8px;
+}
+
+body#mainbody.saturne-theme.mod-dolistream .ds-action-buttons :is(.butAction, .butActionDelete) {
+	margin: 0;
+}
+
+/* "Cancel" is a working link, not a refused action: secondary button instead of the greyed one */
+body#mainbody.saturne-theme.mod-dolistream a.butActionRefused.ds-action-cancel {
+	margin: 0;
+	border-color: var(--saturne-border-strong);
+	background: var(--saturne-surface);
+	color: var(--saturne-text-soft) !important;
+	cursor: pointer;
+}
+
+body#mainbody.saturne-theme.mod-dolistream a.butActionRefused.ds-action-cancel:hover {
+	background: var(--saturne-surface-soft);
+	color: var(--saturne-text) !important;
+	text-decoration: none;
+}
+
+body#mainbody.saturne-theme.mod-dolistream .ds-ring-circle {
+	border-color: var(--saturne-border);
+	border-top-color: var(--saturne-primary);
+}
+
+body#mainbody.saturne-theme.mod-dolistream .ds-action-params {
+	gap: 12px 22px;
+	margin-top: 14px;
+	padding-top: 14px;
+	border-top: 1px solid var(--saturne-border-soft);
+}
+
+body#mainbody.saturne-theme.mod-dolistream .ds-params-label {
+	color: var(--saturne-muted);
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+body#mainbody.saturne-theme.mod-dolistream .ds-field {
+	gap: 8px;
+}
+
+body#mainbody.saturne-theme.mod-dolistream .ds-field-label {
+	color: var(--saturne-text-soft);
+	font-size: 13px;
+	font-weight: 600;
+}
+
+body#mainbody.saturne-theme.mod-dolistream .ds-field-label .error {
+	color: var(--saturne-danger);
+}
+
+/* ---- List of the created elements ---- */
+
+body#mainbody.saturne-theme.mod-dolistream .ds-mass-actions {
+	margin-bottom: 12px;
+}
+
+body#mainbody.saturne-theme.mod-dolistream .ds-mass-actions .butAction {
+	margin: 0;
+}
+
+body#mainbody.saturne-theme.mod-dolistream td.ds-cell-id {
+	color: var(--saturne-faint);
+	font-size: 12px;
+	font-variant-numeric: tabular-nums;
+}
+
+body#mainbody.saturne-theme.mod-dolistream .ds-actioncomm-link {
+	margin: -10px 0 18px;
+	color: var(--saturne-muted);
+	font-size: 12.5px;
+}
+
+body#mainbody.saturne-theme.mod-dolistream .ds-actioncomm-link a {
+	color: var(--saturne-primary-strong);
+	font-weight: 600;
+}
+
+body#mainbody.saturne-theme.mod-dolistream .ds-actioncomm-label {
+	color: var(--saturne-faint);
+}
+
+/* ---- Events tab ---- */
+
+body#mainbody.saturne-theme.mod-dolistream .ds-note-scroll {
+	padding: 6px 8px;
+	border: 1px solid var(--saturne-border);
+	border-radius: var(--saturne-radius-sm);
+	background: var(--saturne-surface-soft);
+}
+
+body#mainbody.saturne-theme.mod-dolistream table.noborder > tbody > tr:not(.liste_titre) > td.ds-empty-row {
+	padding: 28px 20px;
+	color: var(--saturne-muted);
+	text-align: center;
+}
+
+/* ---- Console: kept dark (it is a terminal), in the slate greys of the theme ---- */
+
+/* Room under the content for the closed console bar, fixed at the bottom of the window: the last
+   rows of a long list stay reachable */
+body#mainbody.saturne-theme.mod-dolistream.page-index div.fiche > div.fiche {
+	padding-bottom: 48px;
+}
+
+body#mainbody.saturne-theme.mod-dolistream .ds-console-popup {
+	border-color: #1e293b;
+	border-radius: var(--saturne-radius-lg) var(--saturne-radius-lg) 0 0;
+	background: #0f172a;
+	box-shadow: 0 -8px 32px rgba(15, 23, 42, 0.28);
+	font-family: ui-monospace, 'Cascadia Mono', Consolas, 'Courier New', monospace;
+}
+
+body#mainbody.saturne-theme.mod-dolistream .ds-con-hd {
+	padding: 9px 16px;
+	border-bottom-color: #1e293b;
+	border-radius: 13px 13px 0 0;
+	background: #1e293b;
+}
+
+body#mainbody.saturne-theme.mod-dolistream .ds-con-title {
+	color: #5aaeff;
+}
+
+body#mainbody.saturne-theme.mod-dolistream .ds-con-sub,
+body#mainbody.saturne-theme.mod-dolistream .ds-con-file {
+	color: #94a3b8;
+}
+
+body#mainbody.saturne-theme.mod-dolistream .ds-con-acts,
+body#mainbody.saturne-theme.mod-dolistream .ds-con-acts button {
+	color: #94a3b8;
+}
+
+body#mainbody.saturne-theme.mod-dolistream .ds-con-acts button:hover {
+	color: #f1f5f9;
+}
+
+body#mainbody.saturne-theme.mod-dolistream .ds-con-sep {
+	color: #334155;
+}
+
+body#mainbody.saturne-theme.mod-dolistream .ds-con-body {
+	padding: 10px 16px;
+}
+
+body#mainbody.saturne-theme.mod-dolistream .ds-log-time {
+	color: #64748b;
+}
+
+body#mainbody.saturne-theme.mod-dolistream .ds-log-pfx {
+	color: #5aaeff;
+}
+
+body#mainbody.saturne-theme.mod-dolistream .ds-log-s {
+	color: #4ade80;
+}
+
+body#mainbody.saturne-theme.mod-dolistream .ds-log-e {
+	color: #f87171;
+}
+
+body#mainbody.saturne-theme.mod-dolistream .ds-log-w {
+	color: #fbbf24;
+}
+
+body#mainbody.saturne-theme.mod-dolistream .ds-log-i {
+	color: #cbd5e1;
+}
+
+/* ---- Admin pages ---- */
+
+body#mainbody.saturne-theme.mod-dolistream a.butAction.ds-btn-compact {
+	margin: 0;
+	padding: 6px 12px;
+}
+
+body#mainbody.saturne-theme.mod-dolistream td.ds-feature-check {
+	width: 28px;
+	color: var(--saturne-success);
+	font-weight: 700;
+	text-align: center;
+}

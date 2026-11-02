@@ -2905,79 +2905,8 @@ foreach ($scriptLog as $entry) {
 // ── En-tête Dolibarr avec menu gauche natif ───────────────────────────────────
 $leftMenuKey = 'dolistream_' . str_replace('-', '_', $activeScript);
 
-llxHeader('', 'DoliStream', '', '', 0, 0, '', '', '', 'mod-dolistream page-index', '', '', 'dolistream', $leftMenuKey);
+llxHeader('', 'DoliStream', '', '', 0, 0, '', dolinstreamGetPageCss(), '', dolinstreamGetBodyClass('page-index'), '', '', 'dolistream', $leftMenuKey);
 ?>
-<style>
-.ds-warning-banner {
-	background: #fff3cd;
-	border: 1px solid #ffc107;
-	border-left: 4px solid #993013;
-	padding: 8px 14px;
-	font-size: 0.88em;
-	color: #5a3e0a;
-	margin-bottom: 12px;
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	border-radius: 2px;
-}
-.ds-stats {
-	display: flex;
-	gap: 8px;
-	flex-wrap: wrap;
-	margin-bottom: 12px;
-	align-items: center;
-}
-.ds-stat-chip {
-	background: var(--colorbacktabcard1, #fff);
-	border: 1px solid var(--inputbordercolor, rgba(0,0,0,.15));
-	border-radius: 20px;
-	padding: 4px 10px;
-	font-size: 0.82em;
-	display: flex;
-	align-items: center;
-	gap: 4px;
-}
-.ds-stat-chip strong { color: var(--colorbackhmenu1, rgb(90,50,120)); }
-.ds-hint {
-	background: #eef3fb;
-	border: 1px solid #c5d8f5;
-	padding: 7px 12px;
-	font-size: 0.85em;
-	color: #1a3a6e;
-	border-radius: 2px;
-	margin-bottom: 10px;
-}
-.ds-danger-banner {
-	background: #f8d7da;
-	border: 1px solid #f5c2c7;
-	padding: 7px 12px;
-	font-size: 0.85em;
-	color: #842029;
-	font-weight: 600;
-	border-radius: 2px;
-	margin-bottom: 10px;
-}
-/* ── Spinner inline (CSS pur, aucun JS pour l'animation) ── */
-#ds-ring {
-	visibility: hidden;
-	display: flex;
-	align-items: center;
-	flex-shrink: 0;
-}
-.ds-ring-circle {
-	width: 26px;
-	height: 26px;
-	border: 3px solid #e5dff0;
-	border-top-color: rgb(90,50,120);
-	border-radius: 50%;
-	animation: ds-spin 0.75s linear infinite;
-	animation-play-state: paused;
-}
-@keyframes ds-spin {
-	to { transform: rotate(360deg); }
-}
-</style>
 
 <div class="fiche">
 <?php
@@ -3016,7 +2945,7 @@ print dol_get_fiche_head($head, $activeTab, 'DoliStream', -1, 'technic');
 <?php foreach ($stats as $s): ?>
 	<div class="ds-stat-chip"><?php print $s['icon']; ?> <strong><?php print $s['count']; ?></strong> <?php print $s['label']; ?></div>
 <?php endforeach; ?>
-	<a href="<?php print $_SERVER['PHP_SELF']; ?>?script=<?php print urlencode($activeScript); ?>" style="margin-left:auto;font-size:0.82em;color:var(--colorbackhmenu1,rgb(90,50,120))">↺ <?php print $langs->transnoentitiesnoconv('RefreshStats'); ?></a>
+	<a class="ds-stats-refresh" href="<?php print $_SERVER['PHP_SELF']; ?>?script=<?php print urlencode($activeScript); ?>">↺ <?php print $langs->transnoentitiesnoconv('RefreshStats'); ?></a>
 </div>
 
 <?php if ($activeTab === 'index'): ?>
@@ -3030,21 +2959,21 @@ print dol_get_fiche_head($head, $activeTab, 'DoliStream', -1, 'technic');
 <div class="ds-hint">ℹ <?php print $def['hint']; ?></div>
 
 <!-- Action Line -->
-<form id="ds-run-form" method="POST" action="<?php print $_SERVER['PHP_SELF']; ?>" style="margin-top:12px;">
+<form id="ds-run-form" class="ds-run-form" method="POST" action="<?php print $_SERVER['PHP_SELF']; ?>">
 <input type="hidden" name="action" value="run">
 <input type="hidden" name="script" value="<?php print htmlspecialchars($activeScript); ?>">
 <input type="hidden" name="token" value="<?php print newToken(); ?>">
 <input type="hidden" name="token_check" value="1">
 
-<div class="ds-action-line" style="display:block; padding: 12px; border: 1px solid #e0e4e8; background: #fff; border-radius: 4px;">
+<div class="ds-action-line">
   <!-- L1: Ref, Icon, Title, Buttons -->
-  <div style="display:flex; align-items:center; flex-wrap:wrap; gap:16px;">
-    <div class="ds-action-ref" style="font-family:monospace; font-weight:bold; color:#666;">DS-0001</div>
+  <div class="ds-action-head">
+    <div class="ds-action-ref">DS-0001</div>
     <div class="ds-action-icon"><?php print img_object('', $def['icon']); ?></div>
-    <div class="ds-action-title" style="font-size:1.1em; font-weight:bold; color:var(--colortexttitlenotab);"><?php print $def['label']; ?></div>
-    
-    <div style="display:inline-flex;align-items:center;gap:8px;margin-left:auto;">
-      <div id="ds-ring" style="visibility:hidden;">
+    <div class="ds-action-title"><?php print $def['label']; ?></div>
+
+    <div class="ds-action-buttons">
+      <div id="ds-ring">
         <div class="ds-ring-circle" id="ds-ring-circle"></div>
       </div>
       <?php if ($def['danger']): ?>
@@ -3053,17 +2982,17 @@ print dol_get_fiche_head($head, $activeTab, 'DoliStream', -1, 'technic');
       <?php else: ?>
         <button type="submit" id="ds-run-btn" class="butAction">&#9654; EXÉCUTER</button>
       <?php endif; ?>
-      <a href="?script=<?php print htmlspecialchars($activeScript); ?>" class="butActionRefused" style="margin:0;">ANNULER</a>
+      <a href="?script=<?php print htmlspecialchars($activeScript); ?>" class="butActionRefused ds-action-cancel">ANNULER</a>
     </div>
   </div>
 
   <!-- L2: Params -->
   <?php if (!empty($def['fields'])): ?>
-  <div style="display:flex; align-items:center; flex-wrap:wrap; gap:16px; margin-top:12px; padding-top:12px; border-top: 1px solid #f0f0f0;">
-    <div style="font-size:0.9em; color:#888; font-weight:bold; text-transform:uppercase;">Paramètres :</div>
+  <div class="ds-action-params">
+    <div class="ds-params-label">Paramètres :</div>
     <?php foreach ($def['fields'] as $field): ?>
-      <label style="display:flex;align-items:center;gap:6px;white-space:nowrap;">
-        <span style="font-weight:600;"><?php print $field['label']; ?> <span class="error">*</span></span>
+      <label class="ds-field">
+        <span class="ds-field-label"><?php print $field['label']; ?> <span class="error">*</span></span>
         <?php if ($field['type'] === 'select'): ?>
           <select name="<?php print $field['name']; ?>" id="ds-fld-<?php print $field['name']; ?>" class="flat">
           <?php
@@ -3074,7 +3003,7 @@ print dol_get_fiche_head($head, $activeTab, 'DoliStream', -1, 'technic');
     <?php endforeach; ?>
           </select>
         <?php elseif ($field['type'] === 'multiselect_tiers'): ?>
-          <select name="<?php print $field['name']; ?>[]" id="ds-fld-<?php print $field['name']; ?>" class="flat" multiple="multiple" required style="min-width:300px; max-width:500px;">
+          <select name="<?php print $field['name']; ?>[]" id="ds-fld-<?php print $field['name']; ?>" class="flat ds-field-wide" multiple="multiple" required>
           <?php
             global $db;
             $res = $db->query("SELECT rowid, nom FROM " . MAIN_DB_PREFIX . "societe WHERE status=1 AND client IN (1,3) ORDER BY nom");
@@ -3094,7 +3023,7 @@ print dol_get_fiche_head($head, $activeTab, 'DoliStream', -1, 'technic');
             });
           </script>
         <?php elseif ($field['type'] === 'select_rental_project'): ?>
-          <select name="<?php print $field['name']; ?>" id="ds-fld-<?php print $field['name']; ?>" class="flat" required style="min-width:300px; max-width:500px;">
+          <select name="<?php print $field['name']; ?>" id="ds-fld-<?php print $field['name']; ?>" class="flat ds-field-wide" required>
             <option value="">-- Sélectionnez un projet LLD --</option>
           <?php
             global $db;
@@ -3112,7 +3041,7 @@ print dol_get_fiche_head($head, $activeTab, 'DoliStream', -1, 'technic');
             });
           </script>
         <?php elseif ($field['type'] === 'multiselect_rental_product'): ?>
-          <select name="<?php print $field['name']; ?>[]" id="ds-fld-<?php print $field['name']; ?>" class="flat" multiple="multiple" required style="min-width:300px; max-width:500px;">
+          <select name="<?php print $field['name']; ?>[]" id="ds-fld-<?php print $field['name']; ?>" class="flat ds-field-wide" multiple="multiple" required>
           <?php
             global $db;
             $res = $db->query("SELECT p.rowid, p.ref, p.label, pe.rental_price FROM " . MAIN_DB_PREFIX . "product p LEFT JOIN " . MAIN_DB_PREFIX . "product_extrafields pe ON pe.fk_object = p.rowid WHERE p.tosell=1 AND pe.rental_product=1 ORDER BY p.ref DESC LIMIT 200");
@@ -3134,7 +3063,7 @@ print dol_get_fiche_head($head, $activeTab, 'DoliStream', -1, 'technic');
         <?php elseif ($field['type'] === 'checkbox'): ?>
           <input type="checkbox" name="<?php print $field['name']; ?>" id="ds-fld-<?php print $field['name']; ?>" value="1" <?php print (!empty($field['default']) ? 'checked' : ''); ?>>
         <?php elseif ($field['type'] === 'number'): ?>
-          <input type="number" name="<?php print $field['name']; ?>" id="ds-fld-<?php print $field['name']; ?>" class="flat" style="width:70px;"
+          <input type="number" name="<?php print $field['name']; ?>" id="ds-fld-<?php print $field['name']; ?>" class="flat ds-field-number"
             value="<?php print (int)($field['default'] ?? 10); ?>"
             min="<?php print $field['min'] ?? 1; ?>" max="<?php print $field['max'] ?? 100000; ?>" required>
         <?php elseif ($field['type'] === 'date'): ?>
@@ -3201,15 +3130,15 @@ print_barre_liste(
 <input type="hidden" name="action" value="mass_action_ship_orders">
 <input type="hidden" name="script" value="<?php print htmlspecialchars($activeScript); ?>">
 <?php if ($activeScript === 'generate-order'): ?>
-<div style="margin-bottom: 10px;">
+<div class="ds-mass-actions">
     <button type="submit" class="butAction" name="mass_action_btn" value="validate_ship"><?php print $langs->transnoentities('ValidateAndShip'); ?></button>
 </div>
 <?php endif; ?>
 <table class="noborder centpercent">
 <thead>
 <tr class="liste_titre">
-  <th class="notopandbottom" style="width:20px"><input type="checkbox" class="flat checkall" id="checkall"></th>
-  <th style="width:40px">Id</th>
+  <th class="notopandbottom ds-col-check"><input type="checkbox" class="flat checkall" id="checkall"></th>
+  <th class="ds-col-id">Id</th>
   <th>Réf.</th>
   <?php foreach ($dbHead as $_dh): ?><th><?php print htmlspecialchars($_dh); ?></th><?php endforeach; ?>
 </tr>
@@ -3223,7 +3152,7 @@ print_barre_liste(
 ?>
 <tr class="oddeven">
   <td><input type="checkbox" class="flat checkforselect" name="toselect[]" value="<?php print $_drowid; ?>"></td>
-  <td style="color:#999;font-size:.85em"><?php print $_drowid; ?></td>
+  <td class="ds-cell-id"><?php print $_drowid; ?></td>
   <td><?php print $_dlink; ?></td>
   <?php for ($_di = 2; $_di < count($_dvals); $_di++): ?>
     <td><?php print htmlspecialchars((string)$_dvals[$_di]); ?></td>
@@ -3235,9 +3164,9 @@ print_barre_liste(
 </form>
 
 <?php if ($acId > 0): ?>
-<div style="margin:8px 0 4px;font-size:0.85em;color:#555;">
+<div class="ds-actioncomm-link">
 	📌 <a href="<?php print DOL_URL_ROOT; ?>/comm/action/card.php?id=<?php print $acId; ?>">Voir l'ActionComm enregistrée</a>
-	<span style="color:#999;margin-left:8px;"><?php print htmlspecialchars($acLabel); ?></span>
+	<span class="ds-actioncomm-label"><?php print htmlspecialchars($acLabel); ?></span>
 </div>
 <?php endif; ?>
 
@@ -3265,9 +3194,9 @@ $resql = $db->query($sql);
 if ($resql) {
 	print '<table class="noborder centpercent">';
 	print '<tr class="liste_titre">';
-	print '<th style="width:100px;">ID</th>';
-	print '<th style="width:160px;">' . $langs->trans('Date') . '</th>';
-	print '<th style="width:250px;">' . $langs->trans('Label') . '</th>';
+	print '<th class="ds-col-agenda-id">ID</th>';
+	print '<th class="ds-col-agenda-date">' . $langs->trans('Date') . '</th>';
+	print '<th class="ds-col-agenda-label">' . $langs->trans('Label') . '</th>';
 	print '<th>Log / Description</th>';
 	print '</tr>';
 	$num = $db->num_rows($resql);
@@ -3277,11 +3206,11 @@ if ($resql) {
 			print '<td class="nowrap"><a href="' . DOL_URL_ROOT . '/comm/action/card.php?id=' . $obj->rowid . '">' . img_object('', 'action') . ' ' . $obj->rowid . '</a></td>';
 			print '<td class="nowrap">' . dol_print_date($db->jdate($obj->datep), 'dayhour') . '</td>';
 			print '<td><strong>' . htmlspecialchars($obj->label) . '</strong></td>';
-			print '<td><div style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; background: #fafafa; padding: 4px;">' . $obj->note_private . '</div></td>';
+			print '<td><div class="ds-note-scroll">' . $obj->note_private . '</div></td>';
 			print '</tr>';
 		}
 	} else {
-		print '<tr><td colspan="4" class="opacitymedium" style="padding: 20px; text-align: center;">Aucun événement généré pour le moment.<br>Lancez un script pour voir les logs d\'exécution ici.</td></tr>';
+		print '<tr><td colspan="4" class="opacitymedium ds-empty-row">Aucun événement généré pour le moment.<br>Lancez un script pour voir les logs d\'exécution ici.</td></tr>';
 	}
 	print '</table>';
 	$db->free($resql);
@@ -3308,8 +3237,8 @@ if ($_dsLogSource === 'live') {
 	}
 	$_okN   = count(array_filter($scriptLog, fn($l) => $l['level'] === 'success'));
 	$_errN  = count(array_filter($scriptLog, fn($l) => $l['level'] === 'error'));
-	$_dsLogLabel = htmlspecialchars($script) . ' &nbsp;| &nbsp;<span style="color:#3fb950">' . $_okN . ' OK</span>';
-	if ($_errN > 0) $_dsLogLabel .= ' &nbsp;| &nbsp;<span style="color:#f85149">' . $_errN . ' Err</span>';
+	$_dsLogLabel = htmlspecialchars($script) . ' &nbsp;| &nbsp;<span class="ds-log-s">' . $_okN . ' OK</span>';
+	if ($_errN > 0) $_dsLogLabel .= ' &nbsp;| &nbsp;<span class="ds-log-e">' . $_errN . ' Err</span>';
 	$_dsAutoOpen = true;
 } else {
 	$_logDir = DOL_DATA_ROOT . '/dolistream/';
@@ -3319,7 +3248,7 @@ if ($_dsLogSource === 'live') {
 			usort($_files, fn($a,$b) => filemtime($b) - filemtime($a));
 			$logFilePath = $_files[0];
 			$_rawLines = @file($_files[0], FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-			$_dsLogLabel = 'Dernier : <span style="color:#8b949e">' . htmlspecialchars(basename($_files[0])) . '</span>';
+			$_dsLogLabel = 'Dernier : <span class="ds-con-file">' . htmlspecialchars(basename($_files[0])) . '</span>';
 			if ($_rawLines) {
 				foreach ($_rawLines as $_rl) {
 					// Parse: HH:MM:SS [OK]/[ERR]/[WRN] message
@@ -3335,24 +3264,9 @@ if ($_dsLogSource === 'live') {
 	}
 }
 ?>
-<style>
-.ds-console-popup{position:fixed;bottom:0;right:24px;width:660px;max-width:calc(100vw - 48px);background:#0d1117;border:1px solid #30363d;border-bottom:none;border-radius:8px 8px 0 0;font-family:'Consolas','Courier New',monospace;z-index:9999;box-shadow:0 -4px 20px rgba(0,0,0,.5);}
-.ds-con-hd{display:flex;align-items:center;justify-content:space-between;padding:7px 14px;background:#161b22;border-bottom:1px solid #30363d;border-radius:8px 8px 0 0;cursor:pointer;user-select:none;}
-.ds-con-title{color:#58a6ff;font-weight:700;font-size:.82em;letter-spacing:.5px;white-space:nowrap;}
-.ds-con-sub{color:#6e7681;font-size:.76em;margin-left:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.ds-con-acts{display:flex;gap:10px;align-items:center;font-size:.76em;color:#8b949e;flex-shrink:0;}
-.ds-con-acts button{background:none;border:none;color:#8b949e;cursor:pointer;padding:0;font-family:inherit;font-size:1em;}
-.ds-con-acts button:hover{color:#c9d1d9;}
-.ds-con-sep{color:#30363d;}
-.ds-con-body{height:260px;overflow-y:auto;padding:8px 14px;scroll-behavior:smooth;}
-.ds-log-line{display:flex;gap:8px;margin-bottom:2px;font-size:.76em;line-height:1.5;}
-.ds-log-time{color:#484f58;min-width:56px;flex-shrink:0;}
-.ds-log-pfx{color:#58a6ff;flex-shrink:0;}
-.ds-log-s{color:#3fb950;}.ds-log-e{color:#f85149;}.ds-log-w{color:#d29922;}.ds-log-i{color:#c9d1d9;}
-</style>
 <div class="ds-console-popup" id="ds-cp">
   <div class="ds-con-hd" onclick="dsToggle()">
-    <span style="display:flex;align-items:center;min-width:0;overflow:hidden;">
+    <span class="ds-con-left">
       <span class="ds-con-title">&gt;_ CONSOLE</span>
       <span class="ds-con-sub"><?php print $_dsLogLabel; ?></span>
     </span>
@@ -3366,7 +3280,7 @@ if ($_dsLogSource === 'live') {
       <button id="ds-arr" onclick="dsToggle()" title="Ouvrir / Fermer">&#9650;</button>
     </span>
   </div>
-  <div class="ds-con-body" id="ds-cb" style="display:none">
+  <div class="ds-con-body" id="ds-cb">
   <?php foreach ($_dsLogLines as $_cl): ?>
     <div class="ds-log-line">
       <span class="ds-log-time"><?php print htmlspecialchars($_cl['time']); ?></span>

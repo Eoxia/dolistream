@@ -44,6 +44,40 @@ function dolinstreamAdminPrepareHead(): array
 }
 
 /**
+ * CSS files of the DoliStream back office pages, to pass to llxHeader()
+ *
+ * The page stylesheet is always loaded. DoliStream does not depend on Saturne: only when Saturne is
+ * enabled, its shared modern back office theme and the DoliStream rules built on it are added.
+ *
+ * @return string[]
+ */
+function dolinstreamGetPageCss(): array
+{
+	$css = array();
+	if (isModEnabled('saturne')) {
+		$css[] = '/saturne/css/saturne.min.css';
+	}
+	$css[] = '/dolistream/css/dolistream_page.css';
+	if (isModEnabled('saturne')) {
+		$css[] = '/dolistream/css/dolistream_theme.css';
+	}
+	return $css;
+}
+
+/**
+ * Body classes of the DoliStream back office pages, to pass to llxHeader() as $morecssonbody
+ *
+ * The saturne-theme class turns the shared theme of Saturne on, when Saturne is enabled.
+ *
+ * @param  string $pageClass Class of the page, e.g. 'page-index'
+ * @return string
+ */
+function dolinstreamGetBodyClass(string $pageClass): string
+{
+	return trim('mod-dolistream ' . $pageClass . (isModEnabled('saturne') ? ' saturne-theme' : ''));
+}
+
+/**
  * Get a pool of random dates (past 2 years) for bulk generation
  *
  * @return int[]  Array of unix timestamps

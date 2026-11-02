@@ -26,7 +26,7 @@ $langs->loadLangs(array('admin', 'dolistream@dolistream'));
 $backtopage = GETPOST('backtopage', 'alpha');
 
 $title = $langs->trans('DoliStream') . ' — ' . $langs->trans('About');
-llxHeader('', $title, '', '', 0, 0, '', '', '', 'mod-dolistream page-admin-about');
+llxHeader('', $title, '', '', 0, 0, '', dolinstreamGetPageCss(), '', dolinstreamGetBodyClass('page-admin-about'));
 
 $linkback = '<a href="' . ($backtopage ?: DOL_URL_ROOT . '/admin/modules.php?restore_lastsearch_values=1') . '">'
 	. img_picto($langs->trans('BackToModuleList'), 'back', 'class="pictofixedwidth"')
@@ -48,14 +48,14 @@ print '</div><br>';
 
 print '<table class="noborder centpercent">';
 print '<tr class="liste_titre"><td colspan="2">Fonctionnalités</td></tr>';
-print '<tr class="oddeven"><td>✔</td><td>Génération de tiers (clients/fournisseurs) aléatoires</td></tr>';
-print '<tr class="oddeven"><td>✔</td><td>Génération de produits aléatoires</td></tr>';
-print '<tr class="oddeven"><td>✔</td><td>Génération de factures validées</td></tr>';
-print '<tr class="oddeven"><td>✔</td><td>Génération de commandes validées</td></tr>';
-print '<tr class="oddeven"><td>✔</td><td>Génération de devis</td></tr>';
-print '<tr class="oddeven"><td>✔</td><td>Purge de données par catégorie et date (mode test/confirm)</td></tr>';
-print '<tr class="oddeven"><td>✔</td><td>Statistiques temps réel de la base de données</td></tr>';
-print '<tr class="oddeven"><td>✔</td><td>Interface 100% intégrée Dolibarr (pas de subprocess)</td></tr>';
+print '<tr class="oddeven"><td class="ds-feature-check">✔</td><td>Génération de tiers (clients/fournisseurs) aléatoires</td></tr>';
+print '<tr class="oddeven"><td class="ds-feature-check">✔</td><td>Génération de produits aléatoires</td></tr>';
+print '<tr class="oddeven"><td class="ds-feature-check">✔</td><td>Génération de factures validées</td></tr>';
+print '<tr class="oddeven"><td class="ds-feature-check">✔</td><td>Génération de commandes validées</td></tr>';
+print '<tr class="oddeven"><td class="ds-feature-check">✔</td><td>Génération de devis</td></tr>';
+print '<tr class="oddeven"><td class="ds-feature-check">✔</td><td>Purge de données par catégorie et date (mode test/confirm)</td></tr>';
+print '<tr class="oddeven"><td class="ds-feature-check">✔</td><td>Statistiques temps réel de la base de données</td></tr>';
+print '<tr class="oddeven"><td class="ds-feature-check">✔</td><td>Interface 100% intégrée Dolibarr (pas de subprocess)</td></tr>';
 print '</table>';
 
 print dol_get_fiche_end();
