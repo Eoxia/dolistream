@@ -3322,7 +3322,7 @@ function dsCopy(){
   // URL de l'endpoint AJAX (sans mainmenu/idmenu Dolibarr)
   var _ajaxUrl = '<?php echo DOL_URL_ROOT . "/custom/dolistream/ajax/run.php"; ?>';
   // URL de polling des logs
-  var _pollBase = '<?php echo dol_escape_js($_SERVER["PHP_SELF"]); ?>?action=poll_log';
+  var _pollBase = '<?php echo dol_escape_js($_SERVER["PHP_SELF"]); ?>?action=poll_log&token=<?php echo newToken(); ?>';
 
   var _pollTimer    = null;
   var _pollCount    = 0;
